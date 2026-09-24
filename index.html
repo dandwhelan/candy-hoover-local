@@ -1,0 +1,676 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Candy / Hoover — Local Control</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --ink:#15181d; --muted:#666e7a;
+    --line:#e2e6ec; --accent:#c8102e; --ok:#1c7c4a; --warn:#9a6700; --bad:#b3261e;
+    --chip:#eef1f5; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#101216; --panel:#171a20; --ink:#e8eaee; --muted:#98a1ad;
+           --line:#272c35; --chip:#20242c; --ok:#5fd39b; --warn:#e0b341;
+           --bad:#ff6b6b; --accent:#ff5a72; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1140px;margin:0 auto;padding:20px 16px 60px}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;margin-bottom:18px}
+  h1{font-size:19px;margin:0;font-weight:650;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
+  @media (max-width:860px){ .grid{grid-template-columns:1fr} }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card+.card{margin-top:14px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+           color:var(--muted);margin:0 0 10px;font-weight:600}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  input,select{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:7px;
+        background:var(--bg);color:var(--ink);font:13px var(--mono)}
+  button{border:1px solid var(--line);background:var(--chip);color:var(--ink);
+         padding:8px 12px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:550}
+  button:hover:not(:disabled){border-color:var(--muted)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.go{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.danger{border-color:var(--bad);color:var(--bad)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .dev{padding:9px;border:1px solid var(--line);border-radius:8px;margin-top:8px;
+       cursor:pointer;background:var(--bg)}
+  .dev:hover{border-color:var(--accent)}
+  .dev b{font:13px var(--mono)}
+  .dev span{display:block;color:var(--muted);font-size:12px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+  .tile{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .tile .t{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .tile .v{font:16px/1.3 var(--mono);margin-top:2px}
+  .tile .n{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  td.k{color:var(--muted);width:48%}
+  td.v{font-family:var(--mono);word-break:break-all}
+  .badge{display:inline-block;padding:2px 8px;border-radius:99px;background:var(--chip);
+         font-size:11px;color:var(--muted);margin-left:6px;font-weight:600}
+  .badge.ok{color:var(--ok)} .badge.warn{color:var(--warn)} .badge.bad{color:var(--bad)}
+  pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;
+      overflow:auto;font-size:12px;margin:8px 0 0;max-height:300px;white-space:pre-wrap;
+      word-break:break-all}
+  .empty{color:var(--muted);font-size:13px;padding:8px 0}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  .alert{background:var(--panel);border:1px solid var(--bad);border-left-width:4px;
+         border-radius:8px;padding:14px;margin-bottom:16px}
+  .alert b{color:var(--bad)}
+  .alert code{font:13px var(--mono);background:var(--chip);padding:2px 6px;border-radius:4px}
+  .fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 12px}
+  details{margin-top:12px} summary{cursor:pointer;font-size:12px;color:var(--muted)}
+  .hit{color:var(--ok);font-weight:600}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Candy / Hoover — Local Control</h1>
+  <span class="sub">direct to the appliance on your LAN · no cloud, no account</span>
+  <a id="gfx" href="/" style="margin-left:auto;font-size:13px;color:var(--ink);
+     text-decoration:none;border:1px solid var(--line);padding:7px 12px;
+     border-radius:8px;background:var(--panel)">← Cycle picker</a>
+</header>
+
+<div id="boot"></div>
+
+<div class="grid" id="app">
+  <div>
+    <div class="card">
+      <h2>Find the appliance</h2>
+      <label>Subnet to sweep <span class="sub" id="subhint"></span></label>
+      <input id="base" list="subnets" placeholder="blank = all local subnets">
+      <datalist id="subnets"></datalist>
+      <div class="row"><button id="scan" class="go">Scan network</button></div>
+      <div id="scanout" class="empty">Not scanned yet.</div>
+    </div>
+
+    <div class="card">
+      <h2>Connection</h2>
+      <label>Appliance IP</label>
+      <input id="ip" placeholder="192.168.1.50">
+      <label>Encryption key <span id="keyhint" class="sub"></span></label>
+      <input id="key" placeholder="(blank = plaintext)">
+      <div class="row">
+        <button id="read" class="go">Read status</button>
+        <button id="poll">Auto-refresh</button>
+        <button id="saveIp">Save as default</button>
+      </div>
+      <div class="note">Blank key is normal — most units answer in plaintext.</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Status <span id="meta"></span></h2>
+      <div id="summary"></div>
+      <div id="status" class="empty">Read the appliance to see its state.</div>
+    </div>
+
+    <div class="card">
+      <h2>Controls</h2>
+      <div id="controls" class="empty">Connect first — controls match the detected appliance.</div>
+    </div>
+
+    <div class="card">
+      <h2>Raw command</h2>
+      <label>Parameter string (exactly what the app sends)</label>
+      <div class="row" style="margin-top:4px">
+        <input id="raw" style="flex:1;min-width:240px" placeholder="Write=1&amp;StSt=0&amp;DelMd=0&amp;PrNm=2">
+        <button id="send">Send</button>
+      </div>
+      <div id="cmdout"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let timer = null, DB = null, lastStatus = {}, hostSubnets = [];
+let ident = null, profile = {dial:{}}, dec = {};
+// programs.json is fetched once at boot; readStatus waits on it so the
+// program builder never renders against a half-loaded database.
+const dbReady = fetch("/programs.json").then(r => r.json())
+                  .then(d => { DB = d; }).catch(() => { DB = null; });
+
+/* ---------------------------------------------------------------- guards */
+// Opening index.html straight off disk is the easy mistake: every /api call
+// then resolves to file:///api/... and dies as "Failed to fetch".
+if(location.protocol !== "http:" && location.protocol !== "https:"){
+  $("app").style.display = "none";
+  $("boot").innerHTML =
+    '<div class="alert"><b>This page needs its server.</b><br>' +
+    "You've opened the HTML file directly, so it has no backend to talk to and " +
+    "every request fails. Start the server:<br><br>" +
+    "<code>python server.py</code><br><br>" +
+    'then open <code>http://127.0.0.1:8099</code> instead of this file.</div>';
+}
+
+/* ------------------------------------------------------------------ data */
+const LABELS = {
+  WiFiStatus:"Remote control enabled", StatoWiFi:"Remote control enabled", Err:"Error code",
+  MachMd:"Machine state", Pr:"Program", PrPh:"Program phase", PrCode:"Program code",
+  Temp:"Temperature (°C)", SpinSp:"Spin speed (×100 rpm)", SLevel:"Soil level",
+  Steam:"Steam", DryT:"Drying", DelVal:"Delay value",
+  RemTime:"Remaining time (seconds)", RecipeId:"Recipe id", Lang:"Language",
+  FillR:"Fill level (%)", CheckUpState:"Check-up state",
+  DisTestOn:"Self-test running", DisTestRes:"Self-test result",
+  Opt1:"Option 1", Opt2:"Option 2", Opt3:"Option 3", Opt4:"Option 4", Opt5:"Option 5",
+  Opt6:"Option 6", Opt7:"Option 7", Opt8:"Option 8", Opt9:"Option 9",
+  BaSt:"Battery", LockSt:"Lock state", Tarea:"Area covered", AvgSpeed:"Average speed",
+  Tdays:"Days of usage", TMin:"Minutes of usage", TMIHM:"Hose time",
+  LUTime:"Last used", DOFU:"First use", FiErr:"Filter error"
+};
+
+// Temperatures the washers accept (°C; 0 = cold).
+const TEMPS = [0, 20, 30, 40, 60, 90];
+
+// Soil level is a 1..3 scale on the Wi-Fi washers (the program database carries
+// remaining_time_soil_min / _medium / _max). 0 means the program has no soil setting.
+const SOIL = {0:"None", 1:"Light", 2:"Normal", 3:"Intensive", 4:"Extra"};
+
+const WASHER_FAMILIES = ["WA_PROG", "DUAL_WM_WD", "NFC_PROGRAM"];
+
+// Model-independent commands.
+const PRESETS = {
+  washer:[
+    {t:"Stop",        p:"Write=1&StSt=0&DelMd=0&PrNm=2"},
+    {t:"Reset",       p:"Write=1&StSt=0&PrNm=2"},
+    {t:"Check-up on", p:"Write=1&CheckUpState=1"}
+  ],
+  tumbledryer:[
+    {t:"Stop",  p:"Write=1&StSt=0&DelMd=0&PrNm=2"},
+    {t:"Reset", p:"Write=1&StSt=0&PrNm=2"}
+  ],
+  dishwasher:[
+    {t:"Reset",     p:"Write=1&Reset=1"},
+    {t:"Open door", p:"Write=1&OpenDoorOpt=7"}
+  ],
+  oven:[
+    {t:"Stop",       p:"Write=1&StartStop=0"},
+    {t:"Statistics", p:"GetStats=1"}
+  ],
+  vacuum:[
+    {t:"Lock",   p:"LockSt=1"},
+    {t:"Unlock", p:"LockSt=0"}
+  ]
+};
+
+const DANGEROUS = /StSt=1|StartStop=[1-9]/;
+
+/* --------------------------------------------------------------- helpers */
+async function api(path, params){
+  const qs = new URLSearchParams(params || {}).toString();
+  let r;
+  try{
+    r = await fetch(path + (qs ? "?" + qs : ""));
+  }catch(e){
+    throw new Error("Can't reach the local server at " + location.host +
+                    " — is `python server.py` still running?");
+  }
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(j.error || (r.status + " " + r.statusText));
+  return j;
+}
+
+const esc = s => String(s).replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function flatten(obj, out){
+  out = out || {};
+  for(const k in obj){
+    const v = obj[k];
+    if(v && typeof v === "object" && !Array.isArray(v)) flatten(v, out);
+    else out[k] = v;
+  }
+  return out;
+}
+
+function tile(t, v, n){
+  return '<div class="tile"><div class="t">' + esc(t) + '</div><div class="v">' +
+         esc(v) + '</div>' + (n ? '<div class="n">' + esc(n) + "</div>" : "") + "</div>";
+}
+
+const progById = s => DB && DB.programs.find(p => p.serial === s);
+
+function modelLabel(m){
+  const fam = m.families.filter(f => f !== "OFF")[0] || m.families[0];
+  const head = m.model ? m.model + " (" + (m.type || "").replace("_", "-") + ")"
+                       : (DB.familyLabels[fam] || fam);
+  return head + " · " + m.count + " programs";
+}
+
+function washerModels(){
+  return DB.models.filter(m => m.families.some(f => WASHER_FAMILIES.includes(f)));
+}
+
+/* -------------------------------------------------------------- renderer */
+function renderStatus(j){
+  const f = flatten(j.status);
+  lastStatus = f;
+  dec = j.decoded || {};
+
+  let sum = "";
+  if(j.type === "washer" || j.type === "tumbledryer"){
+    const rem = dec.remaining_minutes;
+    sum = '<div class="tiles">' +
+      tile("State", dec.machine_state ?? (f.MachMd ?? "—"),
+           dec.running && dec.phase ? dec.phase : "") +
+      tile("Error", dec.error == null ? "none" : dec.error, "Err " + (f.Err ?? "—")) +
+      tile("Program", matchName(f.PrCode) || "—", "code " + (f.PrCode ?? "?")) +
+      tile("Remaining", rem == null || !dec.running ? "—"
+           : (rem >= 60 ? Math.floor(rem / 60) + "h " + (rem % 60) + "m" : rem + " min"),
+           dec.running && rem != null
+             ? "ends ~" + new Date(Date.now() + rem * 60000)
+                 .toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})
+             : "RemTime is seconds") +
+      tile("Temperature", (dec.temperature_c ?? "—") + "°C") +
+      tile("Spin", (dec.spin_rpm ?? "—") + " rpm", "SpinSp x100") +
+      tile("Soil level", f.SLevel ?? "—") +
+      tile("Fill", dec.fill_percent == null ? "—" : dec.fill_percent + "%") +
+      tile("Remote control", dec.remote_control ? "on" : "off",
+           dec.remote_control ? "" : "machine will refuse commands") +
+      "</div>";
+  }
+  $("summary").innerHTML = sum;
+
+  const keys = Object.keys(f);
+  if(!keys.length){
+    $("status").innerHTML = '<div class="empty">Empty response.</div>';
+  }else{
+    let html = "<details><summary>All " + keys.length + " fields</summary><table>";
+    for(const k of keys){
+      const label = LABELS[k]
+        ? esc(LABELS[k]) + ' <span class="sub">(' + esc(k) + ')</span>'
+        : esc(k);
+      html += '<tr><td class="k">' + label + '</td><td class="v">' + esc(f[k]) + "</td></tr>";
+    }
+    $("status").innerHTML = html + "</table></details>";
+  }
+
+  $("meta").innerHTML =
+    '<span class="badge ok">' + esc(j.type || "unknown") + "</span>" +
+    '<span class="badge ' + (j.encrypted ? "warn" : "ok") + '">' +
+      (j.encrypted ? "encrypted" : "plaintext") + "</span>" +
+    (f.Err && f.Err !== "0" ? '<span class="badge bad">error ' + esc(f.Err) + "</span>" : "") +
+    '<span class="badge">' + new Date().toLocaleTimeString() + "</span>";
+
+  if(j.recovered_key){
+    $("key").value = j.recovered_key;
+    $("keyhint").textContent = "— recovered from the reply";
+  }
+  renderControls(j.type, f);
+}
+
+// Name the live PrCode, if the program database knows it.
+function matchName(code){
+  const own = profile && profile.names && profile.names[code];
+  if(own) return own;
+  if(!DB || code === undefined) return "";
+  const hits = [...new Set(DB.programs.filter(p => String(p.code) === String(code))
+                                      .map(p => p.label))];
+  return hits.length ? hits.join(" / ") : "not in program database";
+}
+
+function renderControls(type, f){
+  const host = $("controls");
+  host.innerHTML = "";
+
+  const quick = document.createElement("div");
+  quick.className = "row";
+  for(const c of (PRESETS[type] || [])){
+    const b = document.createElement("button");
+    b.textContent = c.t;
+    b.title = c.p;
+    if(/StSt=0|Reset/.test(c.p)) b.className = "danger";
+    b.onclick = () => sendCommand(c.p);
+    quick.appendChild(b);
+  }
+  if(quick.children.length) host.appendChild(quick);
+
+  const isWasher = (type === "washer" || type === "tumbledryer");
+  if(!isWasher || !DB){
+    if(!quick.children.length){
+      host.innerHTML = '<div class="empty">No presets for "' + esc(type) +
+        '" — use the raw command box below.</div>';
+    }
+    return;
+  }
+
+  // ---- program builder, driven by the program database
+  const models = washerModels();
+  const best = (ident && ident.candidates && ident.candidates[0]) || null;
+  let detected = "";
+  if(best){
+    const m = DB.models.find(x => x.id === best.id);
+    detected = '<div class="note" style="margin:0 0 6px">Auto-detected: <span class="hit">' +
+      esc((m && m.model) || best.id.slice(0, 8)) + "</span> — " +
+      esc(best.why.join("; ")) +
+      (ident.slots ? " · machine reports " + ident.slots + " dial positions" : "") +
+      "</div>";
+  }else if(ident && ident.notes && ident.notes.length){
+    detected = '<div class="note" style="margin:0 0 6px">Could not auto-detect: ' +
+      esc(ident.notes.join("; ")) + "</div>";
+  }
+
+  const box = document.createElement("div");
+  box.innerHTML = detected +
+    '<label>Appliance model <span class="sub">(' + models.length +
+      ' washer models in the database)</span></label>' +
+    '<select id="wModel">' + models.map((m, i) =>
+      '<option value="' + i + '">' + esc(modelLabel(m)) + "</option>").join("") +
+    "</select>" +
+    '<label>Program</label><select id="wProg"></select>' +
+    '<div class="fields">' +
+      '<div><label>Temperature</label><select id="wTemp"></select></div>' +
+      '<div><label>Spin (rpm)</label><input id="wSpin"></div>' +
+      '<div><label>Soil level</label><select id="wSoil"></select></div>' +
+      '<div><label>Delay (min, 0 = none)</label><input id="wDelay" value="0"></div>' +
+      '<div><label>Steam</label><select id="wSteam">' +
+        '<option value="0">Off</option><option value="1">On</option></select></div>' +
+    "</div>" +
+    '<label style="margin-top:12px">Command that will be sent</label>' +
+    '<pre id="wPreview"></pre>' +
+    '<div class="row"><button id="wStart" class="go">Start wash</button></div>' +
+    '<div id="wNote" class="note"></div>';
+  host.appendChild(box);
+
+  const fillPrograms = () => {
+    const m = models[+$("wModel").value];
+    const list = m.programs.map(progById).filter(Boolean)
+                  .filter(p => p.family !== "OFF")
+                  .sort((a, b) => (a.sel ?? 99) - (b.sel ?? 99));
+    $("wProg").innerHTML = list.map(p =>
+      '<option value="' + p.serial + '">' +
+      "dial " + (p.sel ?? "?") + " — " + esc(p.label) +
+      (p.code !== undefined ? "  (code " + p.code + ")" : "") +
+      (p.temp !== undefined ? ", " + p.temp + "°C" : "") +
+      (p.spin ? ", " + p.spin + "rpm" : "") +
+      "</option>").join("");
+    // preselect whatever matches the machine's live program code
+    const live = list.find(p => String(p.code) === String(f.PrCode));
+    if(live) $("wProg").value = live.serial;
+    loadProgram();
+  };
+
+  const loadProgram = () => {
+    const p = progById(+$("wProg").value);
+    if(!p) return;
+
+    // Temperature choices are the app's own domain, capped by the program.
+    const tmax = p.tempMax !== undefined ? p.tempMax : 90;
+    const temps = TEMPS.filter(t => t <= tmax);
+    $("wTemp").innerHTML = temps.map(t =>
+      '<option value="' + t + '">' + (t === 0 ? "Cold (0)" : t + "°C") + "</option>").join("");
+    $("wTemp").value = temps.includes(p.temp) ? p.temp : temps[temps.length - 1];
+
+    // Soil level runs over the program's own min..max. Most programs fix it at 0,
+    // meaning the cycle does not expose a soil setting at all.
+    const lo = p.soilMin ?? 0, hi = p.soilMax ?? 0;
+    if(hi > 0){
+      const opts = [];
+      for(let v = Math.max(lo, 1); v <= hi; v++) opts.push(v);
+      $("wSoil").innerHTML = opts.map(v =>
+        '<option value="' + v + '">' + SOIL[v] + " (" + v + ")</option>").join("");
+      $("wSoil").value = opts.includes(p.soil) ? p.soil : opts[opts.length - 1];
+      $("wSoil").disabled = opts.length < 2;
+    }else{
+      $("wSoil").innerHTML = '<option value="">not adjustable on this program</option>';
+      $("wSoil").disabled = true;
+    }
+
+    $("wSpin").value = p.spin !== undefined ? p.spin : (Number(f.SpinSp || 8) * 100);
+    const bits = [];
+    if(p.tempMax !== undefined) bits.push("max " + p.tempMax + "°C");
+    if(p.spinMax) bits.push("max " + p.spinMax + " rpm");
+    if(p.duration) bits.push(p.duration + " min");
+    $("wNote").innerHTML = esc(p.key) + (bits.length ? " · " + esc(bits.join(" · ")) : "") +
+      '<br>Spin goes on the wire as rpm÷100. Program lists come from the program database and vary by ' +
+      'model — check the dial number against your machine before starting.';
+    refresh();
+  };
+
+  const build = () => {
+    const p = progById(+$("wProg").value) || {};
+    const sel = p.sel ?? 0;
+    // Sel is literally 0 in the app; PrNm carries the dial position.
+    let s = "Write=1&Pa=0&Sel=0&PrNm=" + sel;
+    const d = parseInt($("wDelay").value, 10);
+    if(d > 0) s += "&DelMd=1&DelVl=" + d;
+    s += "&StSt=1";
+    const t = $("wTemp").value;
+    if(t !== "") s += "&TmpTgt=" + t + "&TmpDf=" + t;
+    if($("wSoil").value !== "") s += "&SLevTgt=" + $("wSoil").value;   // omitted when fixed
+    const rpm = parseInt($("wSpin").value, 10);
+    if(!isNaN(rpm)){
+      const w = Math.round(rpm / 100);
+      s += "&SpdTgt=" + w + "&SpdDef=" + w;
+    }
+    s += "&Stm=" + ($("wSteam").value || 0);
+    return s;
+  };
+  const refresh = () => { $("wPreview").textContent = build(); };
+
+  $("wModel").onchange = fillPrograms;
+  $("wProg").onchange = loadProgram;
+  box.querySelectorAll("#wTemp,#wSpin,#wSoil,#wDelay,#wSteam")
+     .forEach(el => el.oninput = refresh);
+  $("wStart").onclick = () => sendCommand(build());
+
+  // start on the auto-detected model, or the saved one if you picked it before
+  const wanted = (profile && profile.model) || (best && best.id);
+  const idx = models.findIndex(m => m.id === wanted);
+  $("wModel").value = idx >= 0 ? idx : 0;
+  $("wModel").onchange = () => {
+    fillPrograms();
+    api("/api/profile/save", {ip:$("ip").value.trim(),
+                              model:models[+$("wModel").value].id}).catch(() => {});
+  };
+  fillPrograms();
+  renderLearn(host, f);
+}
+
+/* ------------------------------------------------------- dial learning ---
+   The program database only covers 16 representative models, so a machine that is not one
+   of them still needs its dial mapped. The appliance reports Pr (dial position)
+   and PrCode (program code) for whatever the knob is on, and 24 of the 25
+   known program codes name exactly one program — so turning the dial one
+   click at a time and capturing builds a map of the real machine.          */
+function renderLearn(host, f){
+  const saved = (profile && profile.dial) || {};
+  const rows = Object.keys(saved).sort((a, b) => a - b).map(k => {
+    const e = saved[k];
+    return "<tr><td class='k'>dial " + esc(k) + "</td><td class='v'>" +
+           esc(e.label || "?") + " <span class='sub'>(code " + esc(e.code) + ")</span></td></tr>";
+  }).join("");
+
+  const d = document.createElement("details");
+  d.innerHTML =
+    "<summary>Learn my dial — map this exact machine (" +
+      Object.keys(saved).length + " positions captured)</summary>" +
+    '<div class="note">Turn the dial one position at a time. After each click press ' +
+    "Capture: the machine reports its own program code, and the name comes from the " +
+    "program database, or your own name for it. This works even if your model is not one of the 16 in there.</div>" +
+    '<div class="row">' +
+      '<button id="lCap">Capture current position</button>' +
+      '<button id="lClear" class="danger">Clear map</button>' +
+    "</div>" +
+    '<div id="lNow" class="note"></div>' +
+    (rows ? "<table>" + rows + "</table>" : "");
+  host.appendChild(d);
+
+  const live = "Dial now reads Pr=" + (f.Pr ?? "?") + ", PrCode=" + (f.PrCode ?? "?") +
+               (f.PrCode !== undefined ? " → " + matchName(f.PrCode) : "");
+  $("lNow").textContent = live;
+
+  $("lCap").onclick = async () => {
+    const ip = $("ip").value.trim();
+    const pos = f.Pr;
+    if(pos === undefined){ alert("The machine did not report a dial position."); return; }
+    const entry = {};
+    entry[pos] = {code: f.PrCode, label: matchName(f.PrCode),
+                  temp: f.Temp, spin: f.SpinSp, soil: f.SLevel};
+    profile = await api("/api/profile/save", {ip, dial: JSON.stringify(entry)});
+    readStatus();
+  };
+  $("lClear").onclick = async () => {
+    if(!confirm("Forget the learned dial map for this machine?")) return;
+    profile = await api("/api/profile/save",
+                        {ip:$("ip").value.trim(), dial:"{}", reset:"1"});
+    readStatus();
+  };
+}
+
+/* ---------------------------------------------------------------- actions */
+// Identify the model once per appliance, then reuse it. Two signals do the work:
+// the ProgramN counter count (= number of dial positions) and the live PrCode.
+async function ensureIdentified(ip){
+  if(ident && ident.ip === ip) return ident;
+  try{
+    ident = await api("/api/identify", {ip, key:$("key").value.trim()});
+    profile = await api("/api/profile", {ip}).catch(() => ({dial:{}}));
+  }catch(e){
+    ident = {ip, candidates:[], notes:[e.message]};
+  }
+  return ident;
+}
+
+async function readStatus(){
+  const ip = $("ip").value.trim();
+  if(!ip){ alert("Enter the appliance IP, or scan for it."); return; }
+  $("meta").innerHTML = '<span class="badge">reading…</span>';
+  try{
+    const j = await api("/api/status", {ip, key:$("key").value.trim()});
+    await dbReady;
+    await ensureIdentified(ip);
+    renderStatus(j);
+  }catch(e){
+    $("meta").innerHTML = '<span class="badge bad">failed</span>';
+    $("status").innerHTML = '<div class="empty">' + esc(e.message) + "</div>";
+  }
+}
+
+async function sendCommand(params){
+  const ip = $("ip").value.trim();
+  if(!ip){ alert("Connect to an appliance first."); return; }
+  if(DANGEROUS.test(params) &&
+     !confirm("This starts the machine:\n\n" + params + "\n\nSend it?")) return;
+  $("cmdout").innerHTML = "<pre>sending…</pre>";
+  try{
+    const j = await api("/api/command", {ip, key:$("key").value.trim(), params});
+    $("cmdout").innerHTML = "<pre>" + esc(j.sent) + "\n\n" +
+                            esc(j.response || "(empty reply)") + "</pre>";
+    setTimeout(readStatus, 1200);
+  }catch(e){
+    $("cmdout").innerHTML = "<pre>" + esc(e.message) + "</pre>";
+  }
+}
+
+$("scan").onclick = async () => {
+  let base = $("base").value.trim();
+  if(base){
+    base = base.split(",").map(b => b.trim().split(".").slice(0, 3).join("."))
+               .filter(Boolean).join(",");           // tolerate full IPs and lists
+  }else{
+    // Nothing typed: sweep this PC's own subnets, plus the one the appliance IP
+    // is on — an appliance can sit on a different segment and still be routable.
+    const extra = $("ip").value.trim().split(".").slice(0, 3).join(".");
+    const all = (hostSubnets || []).slice();
+    if(extra.split(".").length === 3 && !all.includes(extra)) all.push(extra);
+    base = all.join(",");
+  }
+  $("base").value = base;
+  $("scan").disabled = true;
+  $("scanout").innerHTML = '<div class="empty">Sweeping ' +
+    (base ? esc(base) + ".0/24" : "every local subnet") + "…</div>";
+  try{
+    const j = await api("/api/scan", base ? {base} : {});
+    if(!j.appliances.length){
+      $("scanout").innerHTML = '<div class="empty">Nothing found on ' + esc(j.base) +
+        ".0/24 — " + j.open.length + " host(s) had port 80 open.<br><br>" +
+        "If your appliance sits on a different subnet from this PC, type that " +
+        "subnet above and scan again.</div>";
+    }else{
+      $("scanout").innerHTML = "";
+      for(const a of j.appliances){
+        const d = document.createElement("div");
+        d.className = "dev";
+        d.innerHTML = "<b>" + esc(a.ip) + "</b><span>" + esc(a.type) +
+          (a.encrypted ? " · encrypted" : " · plaintext") +
+          (a.key ? " · key recovered" : "") + "</span>";
+        d.onclick = () => {
+          $("ip").value = a.ip;
+          if(a.key) $("key").value = a.key;
+          readStatus();
+        };
+        $("scanout").appendChild(d);
+      }
+    }
+  }catch(e){
+    $("scanout").innerHTML = '<div class="empty">' + esc(e.message) + "</div>";
+  }
+  $("scan").disabled = false;
+};
+
+$("ip").oninput = () => {
+  ident = null; profile = {dial:{}};
+  renderSaveIp();
+  const b = $("ip").value.trim().split(".").slice(0, 3).join(".");
+  const opts = hostSubnets.slice();
+  if(b.split(".").length === 3 && !opts.includes(b)) opts.unshift(b);
+  $("subnets").innerHTML = opts.map(s => '<option value="' + s + '">').join("");
+};
+
+function syncGfxLink(){
+  const ip = $("ip").value.trim();
+  $("gfx").href = ip ? "/?ip=" + encodeURIComponent(ip) : "/cycles";
+}
+$("ip").addEventListener("input", syncGfxLink);
+
+// Remember the appliance server-side so every page opens straight onto it.
+let savedIp = "";
+function renderSaveIp(){
+  const cur = $("ip").value.trim();
+  const isDefault = cur && cur === savedIp;
+  $("saveIp").textContent = isDefault ? "Saved ✓" : "Save as default";
+  $("saveIp").title = isDefault ? "Click to forget" : "Open every page on this appliance";
+}
+$("saveIp").onclick = async () => {
+  const cur = $("ip").value.trim();
+  if(!cur){ alert("Enter or scan an appliance IP first."); return; }
+  if(cur === savedIp){
+    savedIp = ((await api("/api/settings/forget")) || {}).ip || "";
+  }else{
+    savedIp = ((await api("/api/settings/save", {ip: cur})) || {}).ip || "";
+  }
+  renderSaveIp();
+};
+
+$("read").onclick = readStatus;
+$("send").onclick = () => { const p = $("raw").value.trim(); if(p) sendCommand(p); };
+$("poll").onclick = function(){
+  if(timer){ clearInterval(timer); timer = null; this.textContent = "Auto-refresh"; }
+  else { timer = setInterval(readStatus, 5000); this.textContent = "Stop refresh"; readStatus(); }
+};
+
+/* ------------------------------------------------------------------- boot */
+if($("app").style.display !== "none"){
+  syncGfxLink();
+  api("/api/settings").then(st => {
+    savedIp = st.ip || "";
+    if(savedIp && !$("ip").value){ $("ip").value = savedIp; syncGfxLink(); readStatus(); }
+    renderSaveIp();
+  }).catch(() => {});
+  api("/api/hostinfo").then(h => {
+    hostSubnets = h.subnets || [];
+    $("subnets").innerHTML = (h.subnets || [])
+      .map(s => '<option value="' + s + '">').join("");
+    $("subhint").textContent = "detected: " + (h.subnets || []).join(", ");
+  }).catch(() => {});
+}
+</script>

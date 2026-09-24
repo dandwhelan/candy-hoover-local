@@ -1,0 +1,9 @@
+# Generated from the official app's program database — build it yourself
+programs.json
+# Per-installation state written by server.py
+settings.json
+profiles.json
+__pycache__/
+*.pyc
+*.bak-*
+*.apk

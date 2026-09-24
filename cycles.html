@@ -1,0 +1,652 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wash — pick a cycle</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#fff; --ink:#14171c; --muted:#6b7280; --line:#e4e7ec;
+    --accent:#c8102e; --accent-soft:#fdecef; --ok:#1c7c4a; --ok-soft:#e7f5ed;
+    --warn:#9a6700; --bad:#b3261e; --chip:#f0f2f5;
+    --shadow:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
+    --shadow-lg:0 4px 12px rgba(16,24,40,.08), 0 12px 28px rgba(16,24,40,.08);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0d0f13; --panel:#161a21; --ink:#e9ecf1; --muted:#98a2b3;
+           --line:#252a33; --accent:#ff5a72; --accent-soft:#2a151b;
+           --ok:#5fd39b; --ok-soft:#12231b; --chip:#1e232b;
+           --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 12px 28px rgba(0,0,0,.5); }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 20px 120px}
+  a{color:inherit}
+
+  /* ---------------------------------------------------------- top bar */
+  .top{display:flex;align-items:center;justify-content:space-between;
+       gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  h1{font-size:22px;margin:0;font-weight:680;letter-spacing:-.02em}
+  .topbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .link{font-size:13px;color:var(--muted);text-decoration:none;font-family:inherit;
+        border:1px solid var(--line);padding:7px 12px;border-radius:8px;
+        background:var(--panel);cursor:pointer}
+  .link:hover{border-color:var(--muted)}
+  #ipPick{font:13px var(--mono);color:var(--ink);background:var(--panel);
+          border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:auto}
+
+  /* ---------------------------------------------------------- status */
+  .state{display:flex;align-items:center;gap:14px;background:var(--panel);
+         border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+         box-shadow:var(--shadow);margin-bottom:22px}
+  .dot{width:10px;height:10px;border-radius:99px;background:var(--ok);flex:none;
+       box-shadow:0 0 0 4px var(--ok-soft)}
+  .dot.busy{background:var(--warn);box-shadow:0 0 0 4px rgba(154,103,0,.15);
+            animation:pulse 1.6s ease-in-out infinite}
+  .dot.err{background:var(--bad);box-shadow:0 0 0 4px rgba(179,38,30,.15)}
+  @keyframes pulse{50%{opacity:.35}}
+  .state .who{font-weight:620}
+  .state .detail{color:var(--muted);font-size:13.5px}
+  .state .right{margin-left:auto;text-align:right;color:var(--muted);font-size:12.5px}
+
+  /* ---------------------------------------------------------- timer */
+  .timer{display:flex;align-items:center;gap:20px;background:var(--panel);
+         border:1px solid var(--line);border-radius:16px;padding:18px 20px;
+         box-shadow:var(--shadow);margin-bottom:22px}
+  .timer[hidden]{display:none}
+  .ring{position:relative;width:108px;height:108px;flex:none}
+  .ring svg{width:108px;height:108px;transform:rotate(-90deg)}
+  .ring circle{fill:none;stroke-width:9;stroke-linecap:round}
+  .ring .track{stroke:var(--chip)}
+  .ring .fill{stroke:var(--accent);stroke-dasharray:326.7;stroke-dashoffset:326.7;
+              transition:stroke-dashoffset .9s linear}
+  .ringtext{position:absolute;inset:0;display:flex;flex-direction:column;
+            align-items:center;justify-content:center;gap:1px}
+  .ringtext b{font-size:26px;font-weight:680;letter-spacing:-.03em;line-height:1}
+  .ringtext span{font-size:11px;color:var(--muted)}
+  .tinfo{min-width:0}
+  .tprog{font-size:18px;font-weight:660;letter-spacing:-.01em}
+  .tphase{color:var(--muted);font-size:14px;margin-top:2px}
+  .tdone{color:var(--muted);font-size:13px;margin-top:8px}
+  @media (max-width:520px){
+    .timer{gap:14px;padding:14px}
+    .ring,.ring svg{width:88px;height:88px}
+    .ringtext b{font-size:22px}
+  }
+
+  /* ---------------------------------------------------------- grid */
+  .leadrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+  .leadrow select{margin-left:auto;background:var(--panel);color:var(--ink);
+       border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;
+       font-size:12.5px;max-width:100%}
+  .lead{margin:0 !important;font-size:13px;text-transform:uppercase;letter-spacing:.08em;
+        color:var(--muted);font-weight:650;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px}
+  .cyc{background:var(--panel);border:1.5px solid var(--line);border-radius:14px;
+       padding:14px 13px 13px;cursor:pointer;text-align:left;font:inherit;color:inherit;
+       box-shadow:var(--shadow);transition:border-color .12s, transform .12s, box-shadow .12s;
+       position:relative;display:flex;flex-direction:column;gap:9px;min-height:132px}
+  .cyc:hover{border-color:var(--muted);transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+  .cyc[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+  .cyc .ico{width:38px;height:38px;border-radius:11px;background:var(--chip);
+            display:grid;place-items:center;color:var(--ink);flex:none}
+  .cyc[aria-pressed="true"] .ico{background:var(--accent);color:#fff}
+  .cyc .nm{font-weight:620;font-size:14.5px;line-height:1.3;letter-spacing:-.01em}
+  .cyc .meta{font-size:12.5px;color:var(--muted);margin-top:auto}
+  .cyc .dial{position:absolute;top:12px;right:12px;font:11px/1 var(--mono);
+             color:var(--muted);background:var(--chip);padding:4px 6px;border-radius:6px}
+  .cyc[aria-pressed="true"] .dial{background:var(--panel);color:var(--accent)}
+  .cyc .live{position:absolute;top:12px;right:12px;font-size:10.5px;font-weight:700;
+             letter-spacing:.04em;color:var(--ok);background:var(--ok-soft);
+             padding:4px 7px;border-radius:6px}
+
+  /* ---------------------------------------------------------- options */
+  .sheet{margin-top:24px;background:var(--panel);border:1px solid var(--line);
+         border-radius:16px;box-shadow:var(--shadow-lg);overflow:hidden}
+  .sheet header{display:flex;align-items:center;gap:13px;padding:16px 18px;
+                border-bottom:1px solid var(--line)}
+  .sheet header .ico{width:42px;height:42px;border-radius:12px;background:var(--accent);
+                     color:#fff;display:grid;place-items:center;flex:none}
+  .sheet header h2{margin:0;font-size:17px;font-weight:660;letter-spacing:-.01em}
+  .sheet header .sub{color:var(--muted);font-size:13px}
+  .opts{padding:6px 18px 18px}
+  .opt{padding:14px 0;border-bottom:1px solid var(--line)}
+  .opt:last-child{border-bottom:0}
+  .opt .t{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+          color:var(--muted);font-weight:650;margin-bottom:9px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{border:1.5px solid var(--line);background:var(--bg);color:var(--ink);
+        padding:9px 15px;border-radius:99px;cursor:pointer;font:inherit;font-size:14px;
+        font-weight:560;transition:border-color .12s,background .12s;min-width:52px}
+  .chip:hover{border-color:var(--muted)}
+  .chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+  .fixed{color:var(--muted);font-size:13.5px;font-style:italic}
+
+  /* ---------------------------------------------------------- action bar */
+  .bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);
+       border-top:1px solid var(--line);box-shadow:0 -4px 20px rgba(16,24,40,.07);
+       padding:13px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;z-index:5}
+  .bar[hidden]{display:none}
+  .bar .info{min-width:0;flex:1}
+  .bar .info .l1{font-weight:620;font-size:14.5px}
+  .bar .info .l2{font:11.5px var(--mono);color:var(--muted);
+                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .btn{border:0;border-radius:11px;padding:13px 26px;font:inherit;font-size:15px;
+       font-weight:650;cursor:pointer;background:var(--accent);color:#fff;flex:none}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.ghost{background:var(--chip);color:var(--ink);padding:13px 18px}
+
+  .msg{margin-top:16px;padding:12px 14px;border-radius:10px;font-size:13.5px;
+       background:var(--panel);border:1px solid var(--line)}
+  .msg.good{border-color:var(--ok);color:var(--ok)}
+  .msg.bad{border-color:var(--bad);color:var(--bad)}
+  .empty{color:var(--muted);padding:30px 0;text-align:center}
+  @media (max-width:520px){
+    .grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+    .bar{padding:11px 14px}
+  }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <h1>Pick a cycle</h1>
+    <div class="topbar">
+      <select id="ipPick" title="Appliance this page is talking to"></select>
+      <button class="link" id="saveIp">Save as default</button>
+      <a class="link" href="/advanced">Advanced view</a>
+    </div>
+  </div>
+
+  <div class="state" id="state">
+    <span class="dot" id="dot"></span>
+    <div>
+      <div class="who" id="who">Connecting…</div>
+      <div class="detail" id="detail">reading the machine</div>
+    </div>
+    <div class="right" id="right"></div>
+  </div>
+
+  <div class="timer" id="timer" hidden>
+    <div class="ring">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="track" cx="60" cy="60" r="52"/>
+        <circle class="fill" id="ringFill" cx="60" cy="60" r="52"/>
+      </svg>
+      <div class="ringtext"><b id="tBig">--</b><span id="tUnit">min left</span></div>
+    </div>
+    <div class="tinfo">
+      <div class="tprog" id="tProg"></div>
+      <div class="tphase" id="tPhase"></div>
+      <div class="tdone" id="tDone"></div>
+    </div>
+  </div>
+
+  <div class="leadrow">
+    <p class="lead" id="lead">Cycles</p>
+    <select id="modelPick" title="Which program set to show"></select>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <div id="sheet"></div>
+  <div id="msg"></div>
+</div>
+
+<div class="bar" id="bar" hidden>
+  <div class="info">
+    <div class="l1" id="barName"></div>
+    <div class="l2" id="barCmd"></div>
+  </div>
+  <button class="btn ghost" id="cancel">Cancel</button>
+  <button class="btn" id="start">Start wash</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let IP = new URLSearchParams(location.search).get("ip") || "";   // settled in boot()
+
+let DB = null, model = null, live = {}, dec = {}, chosen = null;
+
+// The appliance is polled every 15s, so the countdown is interpolated locally
+// between polls and re-synced on each one. cycleTotal is the largest remaining
+// value seen this run, which is what the ring fills against.
+let tickAt = 0, tickSecs = null, cycleTotal = 0, ticker = null;
+let sel = {temp:null, spin:null, soil:null, steam:0, delay:0, opts:0};
+let profile = {};
+
+/* ------------------------------------------------------------ icons ---
+   Drawn here rather than loaded: the appliance is on a private network and
+   the page must work with no internet at all. All 24x24, stroke currentColor. */
+const I = {};
+const svg = d => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+  'stroke-linejoin="round">' + d + "</svg>";
+
+I.cotton = svg('<path d="M8 3 5 5 3 9l3 1v11h12V10l3-1-2-4-3-2"/><path d="M8 3a4 4 0 0 0 8 0"/>');
+I.synthetic = svg('<path d="M7 3 4 6l2 3 1-1v13h10V8l1 1 2-3-3-3-4 2z"/>');
+I.wool = svg('<path d="M8 16.5a3.6 3.6 0 0 1-.6-7.2 3.1 3.1 0 0 1 5.1-2.2 3.6 3.6 0 0 1 3.9 9.4z"/><path d="M8.6 16.5V19M14.8 16.5V19"/><circle cx="18.2" cy="8.4" r="2.1"/>');
+I.delicate = svg('<path d="M20.5 3.5c-1.8 7.6-6.8 11.3-12.4 12.6L4.5 20"/><path d="M20.5 3.5c-6.6.2-11.2 3.5-12.8 8.2a6.2 6.2 0 0 0 .4 4.4"/><path d="M14.4 7c-2.5 1.1-4.5 2.9-5.7 5.4"/>');
+I.baby = svg('<circle cx="12" cy="9" r="4.5"/><path d="M10 8h.01M14 8h.01M10.5 11a2.5 2.5 0 0 0 3 0"/><path d="M7 14.5 5.5 21h13L17 14.5"/>');
+I.rapid = svg('<path d="M13 2 4.5 13.5H11l-1 8.5 9-12h-6.5z"/>');
+I.eco = svg('<path d="M20 4C10 4 4 8.5 4 15a5 5 0 0 0 5 5c6.5 0 11-6 11-16z"/><path d="M4 20c3-6 7-9 12-11"/>');
+I.rinse = svg('<path d="M12 3s6 6.5 6 10.5a6 6 0 0 1-12 0C6 9.5 12 3 12 3z"/><path d="M9.5 14a2.5 2.5 0 0 0 2.5 2.5"/>');
+I.spin = svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/><circle cx="12" cy="12" r="3.2"/>');
+I.dry = svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>');
+I.steam = svg('<path d="M4 20.5h16"/><path d="M8 16.5c0-1.8 1.8-1.8 1.8-3.6S8 11.1 8 9.3s1.8-1.8 1.8-3.6M14.2 16.5c0-1.8 1.8-1.8 1.8-3.6s-1.8-1.8-1.8-3.6 1.8-1.8 1.8-3.6"/>');
+I.care = svg('<path d="M12 21s-7.5-4.5-7.5-10A4.5 4.5 0 0 1 12 8a4.5 4.5 0 0 1 7.5 3c0 5.5-7.5 10-7.5 10z"/>');
+I.hygiene = svg('<path d="M12 2.5 4.5 5.5v6c0 5 3.2 8.4 7.5 10 4.3-1.6 7.5-5 7.5-10v-6z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.4"/>');
+I.jeans = svg('<path d="M7 3h10l.8 18h-4L12 11l-1.8 10h-4z"/><path d="M7 7h10"/>');
+I.mixed = svg('<path d="M12 3a9 9 0 1 0 0 18c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.4-.7-.4-1.1 0-.9.7-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.3-9-7.3z"/><circle cx="7.6" cy="10.6" r=".9"/><circle cx="12" cy="7.6" r=".9"/><circle cx="16.3" cy="10.2" r=".9"/>');
+I.maint = svg('<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/>');
+I.off = svg('<path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/>');
+I.wash = svg('<rect x="3.5" y="2.5" width="17" height="19" rx="3"/><circle cx="12" cy="14" r="5"/><path d="M7.5 6h3"/><circle cx="16.5" cy="6" r=".8"/>');
+
+// keyword -> icon, first match wins so order matters
+const ICON_RULES = [
+  [/off/i, "off"], [/dry|tumbling/i, "dry"], [/steam/i, "steam"],
+  [/rapid|59 min|44 min|30 min|14 min/i, "rapid"], [/eco/i, "eco"],
+  [/rinse/i, "rinse"], [/spin|drain/i, "spin"], [/wool|silk/i, "wool"],
+  [/delicate|hand/i, "delicate"], [/baby/i, "baby"], [/hygiene/i, "hygiene"],
+  [/jeans/i, "jeans"], [/total care|care/i, "care"], [/mixed|synthetic|colou?red/i, "mixed"],
+  [/cotton/i, "cotton"], [/maintenance/i, "maint"], [/all in one/i, "care"],
+];
+const iconFor = name => {
+  for(const [re, key] of ICON_RULES) if(re.test(name)) return I[key];
+  return I.wash;
+};
+
+const SOIL = {1:"Light", 2:"Normal", 3:"Intensive", 4:"Extra"};
+const TEMPS = [0, 20, 30, 40, 60, 90];
+const SPINS = [0, 400, 600, 800, 1000, 1200, 1400, 1600];
+const DELAYS = [0, 60, 120, 180, 360, 540, 720];
+
+// The program database names these options but never pins them to bit positions — that is
+// model-specific. Offered as suggestions when you name a bit yourself.
+const OPTION_SUGGESTIONS = ["Prewash", "Aquaplus", "Anticrease", "Extra dose",
+  "Good night", "Hygiene", "Zoom", "Rinse +1", "Rinse +2", "Rinse +3",
+  "Steam", "Softener", "Intensive", "Refresh", "Night & day"];
+
+const optName = bit => (profile.options && profile.options[bit]) || "Option " + bit;
+// Your machine may not be in the program database, so its codes can carry another
+// model's names. A name you give a program code wins everywhere.
+const nameOf = p => (p && profile.names && profile.names[p.code]) || (p && p.label);
+const allowedBits = p => {
+  const o = p.opts;
+  if(!o) return [];
+  const out = [];
+  for(let i = 0; i < 9; i++) if(o >> i & 1) out.push(i + 1);
+  return out;
+};
+
+function fmt(sec){
+  if(sec == null) return ["--", "min left"];
+  if(sec <= 0) return ["0", "min left"];
+  const m = Math.round(sec / 60);
+  if(m >= 60) return [Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"), "h left"];
+  return [String(m), "min left"];
+}
+
+function renderTimer(){
+  const on = dec.running && tickSecs != null;
+  $("timer").hidden = !on;
+  if(!on) return;
+
+  const left = Math.max(0, tickSecs - (Date.now() - tickAt) / 1000);
+  const [big, unit] = fmt(left);
+  $("tBig").textContent = big;
+  $("tUnit").textContent = unit;
+
+  const total = Math.max(cycleTotal, left) || 1;
+  const done = Math.min(1, Math.max(0, 1 - left / total));
+  $("ringFill").style.strokeDashoffset = (326.7 * (1 - done)).toFixed(1);
+
+  const now = DB && live.PrCode !== undefined
+    ? nameOf(DB.programs.find(p => String(p.code) === String(live.PrCode))) || null : null;
+  $("tProg").textContent = now || "Cycle running";
+  $("tPhase").textContent = [dec.phase, dec.temperature_c != null ? dec.temperature_c + "°C" : null,
+                             dec.spin_rpm ? dec.spin_rpm + " rpm" : null]
+                            .filter(Boolean).join(" · ");
+  const end = new Date(Date.now() + left * 1000);
+  $("tDone").textContent = "Finishes about " +
+    end.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) +
+    " · " + Math.round(done * 100) + "% through";
+}
+
+/* ----------------------------------------------------------- plumbing */
+async function api(path, params){
+  const qs = new URLSearchParams(params || {}).toString();
+  let r;
+  try{ r = await fetch(path + (qs ? "?" + qs : "")); }
+  catch(e){ throw new Error("Can't reach the local server — is `python server.py` running?"); }
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const esc = s => String(s).replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+const isOff = p => p.family === "OFF" || /(^|_)OFF$/.test(p.key || "") ||
+                   /^off$/i.test(p.label || "");
+
+const programsOf = m => m.programs
+  .map(s => DB.programs.find(p => p.serial === s))
+  .filter(p => p && !isOff(p))
+  .sort((a, b) => (a.sel ?? 99) - (b.sel ?? 99));
+
+// Whatever the machine currently reports for option bit N (status field OptN).
+const live_opt = bit => live["Opt" + bit];
+
+/* ------------------------------------------------------------- render */
+function renderState(){
+  const err = dec.error != null;
+  $("dot").className = "dot" + (err ? " err" : dec.running ? " busy" : "");
+  $("who").textContent = model && model.model
+    ? model.model + (model.type ? " · " + model.type.replace("_", "-") : "")
+    : "Washing machine";
+
+  const now = DB && live.PrCode !== undefined
+    ? nameOf(DB.programs.find(p => String(p.code) === String(live.PrCode))) || null : null;
+  const bits = [];
+  if(err) bits.push("Error " + dec.error);
+  else bits.push(dec.machine_state || "—");
+  if(dec.running && dec.phase) bits.push(dec.phase);
+  if(now) bits.push(dec.running ? now : "dial on " + now);
+  if(dec.running && dec.remaining_minutes != null){
+    const m = dec.remaining_minutes;
+    bits.push(m >= 60 ? Math.floor(m / 60) + " h " + (m % 60) + " min left"
+                      : m + " min left");
+  }
+  $("detail").textContent = bits.join(" · ");
+
+  const r = [];
+  if(dec.temperature_c != null) r.push(dec.temperature_c + "°C");
+  if(dec.spin_rpm != null) r.push(dec.spin_rpm + " rpm");
+  if(dec.fill_percent != null && dec.running) r.push(dec.fill_percent + "% full");
+  if(dec.remote_control === false) r.push("remote control OFF");
+  $("right").textContent = r.join(" · ");
+}
+
+function renderGrid(){
+  const list = programsOf(model);
+  $("lead").textContent = list.length + " cycles";
+  $("grid").innerHTML = list.map(p => {
+    const bits = [];
+    if(p.temp !== undefined) bits.push(p.temp === 0 ? "Cold" : p.temp + "°C");
+    if(p.spin) bits.push(p.spin + " rpm");
+    if(p.duration) bits.push(p.duration + " min");
+    const isLive = String(p.code) === String(live.PrCode);
+    return '<button class="cyc" data-s="' + p.serial + '" aria-pressed="' +
+      (chosen && chosen.serial === p.serial) + '">' +
+      (isLive ? '<span class="live">ON DIAL</span>'
+              : '<span class="dial">' + (p.sel ?? "?") + "</span>") +
+      '<span class="ico">' + iconFor(nameOf(p)) + "</span>" +
+      '<span class="nm">' + esc(nameOf(p)) + "</span>" +
+      '<span class="meta">' + esc(bits.join(" · ") || "—") + "</span>" +
+      "</button>";
+  }).join("");
+  $("grid").querySelectorAll(".cyc").forEach(b => {
+    b.onclick = () => choose(DB.programs.find(p => p.serial === +b.dataset.s));
+  });
+}
+
+function chips(id, values, current, fmt){
+  return '<div class="chips">' + values.map(v =>
+    '<button class="chip" data-k="' + id + '" data-v="' + v + '" aria-pressed="' +
+    (String(v) === String(current)) + '">' + fmt(v) + "</button>").join("") + "</div>";
+}
+
+function renderSheet(){
+  if(!chosen){ $("sheet").innerHTML = ""; $("bar").hidden = true; return; }
+  const p = chosen;
+  const tmax = p.tempMax !== undefined ? p.tempMax : 90;
+  const smax = p.spinMax || 1400;
+  const lo = p.soilMin ?? 0, hi = p.soilMax ?? 0;
+
+  let soilBlock;
+  if(hi > 0 && hi > lo){
+    const opts = [];
+    for(let v = Math.max(lo, 1); v <= hi; v++) opts.push(v);
+    soilBlock = chips("soil", opts, sel.soil, v => SOIL[v] || v);
+  }else if(hi > 0){
+    soilBlock = '<div class="fixed">Fixed at ' + (SOIL[hi] || hi) + " for this cycle</div>";
+  }else{
+    soilBlock = '<div class="fixed">This cycle has no soil setting</div>';
+  }
+
+  $("sheet").innerHTML =
+    '<div class="sheet"><header><span class="ico">' + iconFor(nameOf(p)) + "</span>" +
+      "<div><h2>" + esc(nameOf(p)) + "</h2><div class='sub'>dial position " +
+      (p.sel ?? "?") + (p.duration ? " · about " + p.duration + " min" : "") +
+      ' · <button class="chip" id="progName" style="padding:2px 9px;font-size:12px;' +
+      'min-width:0">Rename</button>' +
+      "</div></div></header><div class='opts'>" +
+      '<div class="opt"><div class="t">Temperature</div>' +
+        chips("temp", TEMPS.filter(t => t <= tmax), sel.temp,
+              v => v === 0 ? "Cold" : v + "°") + "</div>" +
+      '<div class="opt"><div class="t">Spin speed</div>' +
+        chips("spin", SPINS.filter(v => v <= smax), sel.spin,
+              v => v === 0 ? "No spin" : v) + "</div>" +
+      '<div class="opt"><div class="t">Soil level</div>' + soilBlock + "</div>" +
+      '<div class="opt"><div class="t">Delay start</div>' +
+        chips("delay", DELAYS, sel.delay,
+              v => v === 0 ? "None" : (v / 60) + " h") + "</div>" +
+      '<div class="opt"><div class="t">Extras</div>' + optionBlock(p) + "</div>" +
+    "</div></div>";
+
+  $("sheet").querySelectorAll(".chip[data-k]").forEach(c => {
+    c.onclick = () => { sel[c.dataset.k] = +c.dataset.v; renderSheet(); renderBar(); };
+  });
+  $("sheet").querySelectorAll(".chip[data-bit]").forEach(c => {
+    c.onclick = () => { sel.opts ^= 1 << (+c.dataset.bit - 1); renderSheet(); renderBar(); };
+  });
+  const renamer = $("progName");
+  if(renamer) renamer.onclick = async () => {
+    const name = prompt("What is this cycle called on your machine's panel? " +
+                        "Leave empty to go back to \"" + p.label + "\".", nameOf(p));
+    if(name === null) return;
+    const patch = {}; patch[p.code] = name.trim();
+    profile = await api("/api/profile/save", {ip: IP, names: JSON.stringify(patch)});
+    renderGrid(); renderSheet(); renderState(); renderTimer();
+  };
+  const namer = $("optName");
+  if(namer) namer.onclick = async () => {
+    const bits = allowedBits(chosen);
+    const live = bits.filter(b => String(live_opt(b)) === "1");
+    const bit = prompt("Which option number? " + bits.join(", ") +
+      (live.length ? " — the machine currently has " + live.join(", ") + " on." : ""),
+      live[0] || bits[0]);
+    if(!bit) return;
+    const name = prompt("Name it as it appears on the machine. Suggestions: " +
+                        OPTION_SUGGESTIONS.join(", "), optName(bit));
+    if(!name) return;
+    const patch = {}; patch[bit] = name;
+    profile = await api("/api/profile/save",
+                        {ip: IP, options: JSON.stringify(patch)});
+    renderSheet();
+  };
+  renderBar();
+}
+
+function optionBlock(p){
+  const bits = allowedBits(p);
+  if(!bits.length) return '<div class="fixed">This cycle takes no extras</div>';
+  return '<div class="chips">' + bits.map(b =>
+      '<button class="chip" data-bit="' + b + '" aria-pressed="' +
+      ((sel.opts >> (b - 1) & 1) === 1) + '">' + esc(optName(b)) + "</button>").join("") +
+    '</div><div class="note">Turn one on at the machine, then press Name to label it ' +
+    'for this washer. <button class="chip" id="optName" style="padding:4px 10px;' +
+    'font-size:12px;min-width:0">Name a button</button></div>';
+}
+
+function build(){
+  const p = chosen;
+  let s = "Write=1&Pa=0&Sel=0&PrNm=" + (p.sel ?? 0);
+  if(sel.delay > 0) s += "&DelMd=1&DelVl=" + sel.delay;
+  s += "&StSt=1";
+  if(sel.temp !== null) s += "&TmpTgt=" + sel.temp + "&TmpDf=" + sel.temp;
+  if(sel.soil !== null && (p.soilMax ?? 0) > 0) s += "&SLevTgt=" + sel.soil;
+  if(sel.spin !== null){
+    const w = Math.round(sel.spin / 100);
+    s += "&SpdTgt=" + w + "&SpdDef=" + w;
+  }
+  s += "&Stm=" + (sel.steam || 0);
+  if(sel.opts > 0) s += "&OptMsk=" + sel.opts;      // 9-bit mask, bit0 = Opt1
+  return s;
+}
+
+function renderBar(){
+  if(!chosen){ $("bar").hidden = true; return; }
+  $("bar").hidden = false;
+  const bits = [sel.temp === 0 ? "Cold" : sel.temp + "°C"];
+  if(sel.spin !== null) bits.push(sel.spin === 0 ? "no spin" : sel.spin + " rpm");
+  if(sel.soil !== null && (chosen.soilMax ?? 0) > 0) bits.push((SOIL[sel.soil] || "").toLowerCase());
+  if(sel.delay > 0) bits.push("in " + (sel.delay / 60) + " h");
+  const on = allowedBits(chosen).filter(b => sel.opts >> (b - 1) & 1);
+  if(on.length) bits.push(on.map(optName).join(" + "));
+  $("barName").textContent = chosen.label + " — " + bits.filter(Boolean).join(", ");
+  $("barCmd").textContent = build();
+}
+
+function choose(p){
+  chosen = p;
+  sel = {
+    temp: p.temp !== undefined ? p.temp : 40,
+    spin: p.spin !== undefined ? p.spin : 1000,
+    soil: (p.soilMax ?? 0) > 0 ? (p.soil ?? p.soilMax) : null,
+    steam: 0, delay: 0,
+    opts: allowedBits(p).reduce(
+      (m, b) => m | (String(live_opt(b)) === "1" ? 1 << (b - 1) : 0), 0),
+  };
+  renderGrid(); renderSheet();
+  $("sheet").scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+/* ------------------------------------------------------------ actions */
+$("cancel").onclick = () => { chosen = null; renderGrid(); renderSheet(); };
+
+$("start").onclick = async () => {
+  const cmd = build();
+  if(!confirm("Start the machine?\n\n" + chosen.label + "\n\n" + cmd)) return;
+  $("start").disabled = true;
+  try{
+    const j = await api("/api/command", {ip: IP, params: cmd});
+    $("msg").innerHTML = '<div class="msg good">Sent. Machine replied: ' +
+      esc(j.response || "(nothing)") + "</div>";
+    setTimeout(refresh, 1500);
+  }catch(e){
+    $("msg").innerHTML = '<div class="msg bad">' + esc(e.message) + "</div>";
+  }
+  $("start").disabled = false;
+};
+
+async function refresh(){
+  const j = await api("/api/status", {ip: IP});
+  live = {}; dec = j.decoded || {};
+  for(const v of Object.values(j.status)) if(v && typeof v === "object") Object.assign(live, v);
+
+  if(dec.running && dec.remaining_seconds != null){
+    tickSecs = dec.remaining_seconds;
+    tickAt = Date.now();
+    if(tickSecs > cycleTotal) cycleTotal = tickSecs;
+    if(!ticker) ticker = setInterval(renderTimer, 1000);
+  }else{
+    tickSecs = null; cycleTotal = 0;
+    if(ticker){ clearInterval(ticker); ticker = null; }
+  }
+  renderState();
+  renderTimer();
+  if(model) renderGrid();
+}
+
+let savedIp = "";
+
+// Appliances we have talked to before, so switching back is one click.
+async function renderIpPicker(){
+  let known = [];
+  try{
+    const r = await api("/api/appliances");
+    known = r.appliances || [];
+    savedIp = r.default || "";
+  }catch(e){}
+
+  const ips = known.map(a => a.ip);
+  if(IP && !ips.includes(IP)){ known.unshift({ip: IP, model: ""}); ips.unshift(IP); }
+
+  $("ipPick").innerHTML =
+    (known.length
+      ? known.map(a => '<option value="' + esc(a.ip) + '">' + esc(a.ip) +
+          (a.model ? " — " + esc(a.model) : "") +
+          (a.ip === savedIp ? "  ★" : "") + "</option>").join("")
+      : '<option value="">no appliance yet</option>') +
+    '<option value="__new">Enter an IP…</option>';
+  if(IP) $("ipPick").value = IP;
+
+  $("ipPick").onchange = async () => {
+    let v = $("ipPick").value;
+    if(v === "__new"){
+      v = (prompt("Appliance IP on your network", IP || "192.168.") || "").trim();
+      if(!v){ $("ipPick").value = IP; return; }
+    }
+    IP = v;
+    const u = new URL(location.href);
+    u.searchParams.set("ip", IP);
+    history.replaceState({}, "", u);
+    location.reload();
+  };
+
+  const isDefault = IP && IP === savedIp;
+  $("saveIp").textContent = isDefault ? "Default ★" : "Save as default";
+  $("saveIp").title = isDefault ? "Click to forget this default"
+                                : "Open every page on this appliance";
+  $("saveIp").onclick = async () => {
+    if(!IP){ alert("Pick an appliance first."); return; }
+    if(isDefault) await api("/api/settings/forget");
+    else await api("/api/settings/save", {ip: IP});
+    await renderIpPicker();
+  };
+}
+
+async function boot(){
+  try{ savedIp = (await api("/api/settings")).ip || ""; }catch(e){}
+  if(!IP) IP = savedIp;
+  await renderIpPicker();
+
+  if(!IP){
+    $("grid").innerHTML = '<div class="empty">No appliance yet — pick ' +
+      '<b>Enter an IP…</b> above, or use the ' +
+      '<a href="/advanced">advanced view</a> to scan for it.</div>';
+    $("who").textContent = "Not connected";
+    $("detail").textContent = "";
+    return;
+  }
+  try{
+    DB = await fetch("/programs.json").then(r => r.json());
+    const id = await api("/api/identify", {ip: IP});
+    const prof = await api("/api/profile", {ip: IP}).catch(() => ({}));
+    profile = prof || {};
+    const want = prof.model || (id.candidates[0] && id.candidates[0].id);
+    model = DB.models.find(m => m.id === want) || DB.models[0];
+    const washers = DB.models.filter(m =>
+      m.families.some(f => ["WA_PROG", "DUAL_WM_WD", "NFC_PROGRAM"].includes(f)));
+    $("modelPick").innerHTML = washers.map(m =>
+      '<option value="' + m.id + '">' + esc(m.model || m.id.slice(0, 8)) +
+      " · " + (m.type || "").replace("_", "-") + " · " + m.count + " programs</option>").join("");
+    $("modelPick").value = model.id;
+    $("modelPick").onchange = async () => {
+      model = DB.models.find(m => m.id === $("modelPick").value);
+      chosen = null; renderSheet(); renderGrid();
+      await api("/api/profile/save", {ip: IP, model: model.id}).catch(() => {});
+    };
+    await refresh();
+    renderGrid();
+    setInterval(refresh, 15000);   // the appliance is a tiny embedded server
+  }catch(e){
+    $("dot").className = "dot err";
+    $("who").textContent = IP + " is not responding";
+    $("detail").textContent = "";
+    $("grid").innerHTML = '<div class="empty">' + esc(e.message) +
+      '<br><br><button class="link" onclick="location.reload()">Try again</button></div>';
+  }
+}
+boot();
+</script>
