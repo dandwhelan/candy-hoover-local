@@ -99,7 +99,10 @@ an independent read-only implementation of the same API.
 - **`WiFiStatus` is not link state.** It says whether the panel is in remote mode, and
   the appliance only accepts commands while it reads `1`. If writes are accepted but
   nothing happens, check this first.
-- **`Pr` is not the dial position.** Identify the running program by `PrCode`.
+- **`Pr` is the dial position, not a program identifier.** Tested on a real washer: the
+  lifetime counter that went up at the end of a cycle was the `ProgramN` matching `Pr`.
+  Positions are shared across different programs from model to model, so identify
+  *what* is running by `PrCode`.
 
 ## Commands
 
@@ -193,6 +196,13 @@ Program families by name prefix: `DUAL_WM_WD` (washer-dryer), `WA_PROG` (Wi-Fi w
 `DW_PROG` / `DW_WIFI` (dishwasher), `OV_PROG` (oven), and `NFC_*` for NFC-tagged cycles.
 
 `extract_programs.py` turns this into `programs.json`.
+
+### Lifetime counters
+
+`http-getStatistics.json` returns one `ProgramN` counter per dial position, plus
+`Temp0to30`, `Temp40` and `Temp60to90` (heating runs, so they add up to more than the
+cycle count) and dryer counters. Send `http-prepareStatistics.json` first and wait about
+two seconds, or every counter reads `0`. A counter goes up when its cycle finishes.
 
 **Program codes are shared between models, but names aren't always.** A machine that
 isn't one of the 16 can report a code that the database names differently from its own
