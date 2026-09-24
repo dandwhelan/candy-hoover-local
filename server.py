@@ -330,7 +330,9 @@ def _finish(key, cur, now):
     entry = {k: cur.get(k) for k in ("code", "pos", "temp", "spin", "fill", "soil")}
     entry.update({"ip": key, "started": round(cur["started"]), "ended": round(ended),
                   "estimate": cur["total"], "from_start": cur["from_start"],
-                  "duration": round(ended - cur["started"]) if cur["from_start"] else None})
+                  "duration": round(ended - cur["started"]) if cur["from_start"] else None,
+                  # ran to the end, rather than stopped or replaced part-way
+                  "completed": (cur.get("left") or 0) <= 300})
     h = read_history()
     h["cycles"] = (h["cycles"] + [entry])[-HISTORY_MAX:]
     _write_json(HISTORY, h)
@@ -363,10 +365,13 @@ def track_cycle(ip, flat, dec):
                  or now - cur.get("seen", 0) > 3 * 3600
                  or remaining > cur["total"] + 600)
         if fresh:
+            # seeing the machine idle, or another cycle, just before counts as seeing it start
+            watched = (now - _quiet.get(key, 0) <= 180
+                       or (cur is not None and now - cur.get("seen", 0) <= 180))
             if cur is not None:
                 _finish(key, cur, now)
             cur = {"code": code, "pos": _num(flat.get("Pr")), "total": remaining,
-                   "started": now, "from_start": now - _quiet.get(key, 0) <= 180,
+                   "started": now, "from_start": watched,
                    "temp": dec.get("temperature_c"), "spin": dec.get("spin_rpm"),
                    "soil": _num(flat.get("SLevel")), "fill": dec.get("fill_percent")}
             cycles[key] = cur
@@ -389,7 +394,8 @@ def typical_length(key, code):
     """Median length of past cycles of this program on this machine that were
     seen from the start, for estimating progress when this one wasn't."""
     runs = sorted(c["duration"] for c in read_history()["cycles"]
-                  if c.get("ip") == key and str(c.get("code")) == str(code) and c.get("duration"))
+                  if c.get("ip") == key and str(c.get("code")) == str(code) and c.get("duration")
+                  and c.get("completed", True))
     return runs[len(runs) // 2] if runs else None
 
 
@@ -451,6 +457,20 @@ def watch_default():
                 last_snap = time.time()
             except Exception:
                 pass
+
+
+COMMANDS_LOG = os.path.join(HERE, "commands.log")
+
+
+def log_command(ip, params, response):
+    """Keep every command sent, so a surprise at the machine can be traced."""
+    line = "%s  %s  %s  -> %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), ip, params,
+                                    str(response).strip()[:200])
+    try:
+        with open(COMMANDS_LOG, "a", encoding="utf-8") as fh:
+            fh.write(line)
+    except OSError:
+        pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -628,6 +648,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not ip or not params:
                     return self._send(400, {"error": "ip and params required"})
                 body, sent = cp.send_command(ip, params, q.get("key", ""))
+                log_command(ip, params, body)
                 return self._send(200, {"sent": sent, "params": params, "response": body})
 
             return self._send(404, {"error": "no such route"})

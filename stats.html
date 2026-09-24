@@ -214,7 +214,7 @@ function renderTiles(){
   const rows = counters ? Object.entries(counters).filter(([, n]) => n > 0) : [];
   const total = rows.reduce((a, [, n]) => a + n, 0);
   const top = rows.sort((a, b) => b[1] - a[1])[0];
-  const timed = hist.cycles.filter(c => c.duration);
+  const timed = hist.cycles.filter(c => c.duration && c.completed !== false);
   const avg = timed.length ? timed.reduce((a, c) => a + c.duration, 0) / timed.length : null;
   const tsum = temps ? temps.cold + temps.warm + temps.hot : 0;
   const lastFill = live.FillR != null && live.MachMd == "2" ? +live.FillR
@@ -330,7 +330,8 @@ function renderRecent(){
       const d = new Date(c.started * 1000);
       return "<tr><td>" + esc(d.toLocaleDateString([], {weekday: "short", day: "numeric", month: "short"}) + " " +
         d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})) + "</td><td>" + esc(cycleName(c)) + "</td><td>" +
-        (c.duration ? fmtDur(c.duration) : '<span title="Started before it was being watched">~' + fmtDur(c.ended - c.started) + "+</span>") +
+        (c.completed === false ? '<span title="Stopped before it finished">Stopped after ' + fmtDur(c.ended - c.started) + "</span>"
+         : c.duration ? fmtDur(c.duration) : '<span title="Started before it was being watched">~' + fmtDur(c.ended - c.started) + "+</span>") +
         "</td><td>" + (c.temp != null ? c.temp + " °C" : "—") + "</td><td>" + (c.spin ? c.spin + " rpm" : "—") +
         "</td><td>" + (c.fill != null ? c.fill + "%" : "—") + "</td></tr>";
     }).join("") + "</tbody></table>";
