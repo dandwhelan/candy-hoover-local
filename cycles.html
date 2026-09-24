@@ -212,7 +212,7 @@ let DB = null, model = null, live = {}, dec = {}, chosen = null;
 // between polls and re-synced on each one. cycleTotal is the cycle's full length
 // as the server saw it; totalKnown is false when it didn't see the cycle start,
 // and then no progress is claimed (the machine only reports time left).
-let tickAt = 0, tickSecs = null, cycleTotal = 0, totalKnown = false, ticker = null;
+let tickAt = 0, tickSecs = null, cycleTotal = 0, totalKnown = false, typical = null, ticker = null;
 let sel = {temp:null, spin:null, soil:null, steam:0, delay:0, opts:0};
 let profile = {};
 
@@ -298,8 +298,11 @@ function renderTimer(){
   $("tBig").textContent = big;
   $("tUnit").textContent = unit;
 
-  const total = Math.max(cycleTotal, left) || 1;
-  const done = totalKnown ? Math.min(1, Math.max(0, 1 - left / total)) : 0;
+  // Seen from the start: exact. Otherwise estimate from how long this cycle
+  // usually takes here, or claim nothing.
+  const base = totalKnown ? cycleTotal : typical;
+  const total = Math.max(base || 0, left) || 1;
+  const done = base ? Math.min(1, Math.max(0, 1 - left / total)) : 0;
   $("ringFill").style.strokeDashoffset = (326.7 * (1 - done)).toFixed(1);
 
   const now = DB && live.PrCode !== undefined
@@ -311,7 +314,9 @@ function renderTimer(){
   const end = new Date(Date.now() + left * 1000);
   $("tDone").textContent = "Finishes about " +
     end.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) +
-    (totalKnown ? " · " + Math.round(done * 100) + "% through" : "");
+    (totalKnown ? " · " + Math.round(done * 100) + "% through"
+     : base ? " · about " + Math.round(done * 100) + "% through"
+     : " · started before this was being watched, so no progress yet");
 }
 
 /* ----------------------------------------------------------- plumbing */
@@ -551,9 +556,10 @@ async function refresh(){
     tickAt = Date.now();
     cycleTotal = (j.cycle && j.cycle.total_seconds) || tickSecs;
     totalKnown = !!(j.cycle && j.cycle.from_start);
+    typical = (j.cycle && j.cycle.typical_seconds) || null;
     if(!ticker) ticker = setInterval(renderTimer, 1000);
   }else{
-    tickSecs = null; cycleTotal = 0; totalKnown = false;
+    tickSecs = null; cycleTotal = 0; totalKnown = false; typical = null;
     if(ticker){ clearInterval(ticker); ticker = null; }
   }
   renderState();

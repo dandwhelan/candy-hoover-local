@@ -378,8 +378,19 @@ def track_cycle(ip, flat, dec):
         if dec.get("fill_percent") is not None:
             cur["fill"] = max(cur.get("fill") or 0, dec["fill_percent"])
         _write_json(CYCLES, cycles)
-        return {"total_seconds": cur["total"], "from_start": cur["from_start"],
-                "started": cur["started"]}
+        out = {"total_seconds": cur["total"], "from_start": cur["from_start"],
+               "started": cur["started"]}
+        if not cur["from_start"]:
+            out["typical_seconds"] = typical_length(key, code)
+        return out
+
+
+def typical_length(key, code):
+    """Median length of past cycles of this program on this machine that were
+    seen from the start, for estimating progress when this one wasn't."""
+    runs = sorted(c["duration"] for c in read_history()["cycles"]
+                  if c.get("ip") == key and str(c.get("code")) == str(code) and c.get("duration"))
+    return runs[len(runs) // 2] if runs else None
 
 
 def _went_quiet(ip):
