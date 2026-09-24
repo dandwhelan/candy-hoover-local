@@ -311,6 +311,9 @@ def decode_status(flat: dict) -> dict:
     return out
 
 
+STATS_SETTLE = 2.0        # seconds between prepareStatistics and getStatistics
+
+
 def read_statistics(ip: str, key: str = "", timeout: float = TIMEOUT):
     """
     Read the appliance's lifetime counters.
@@ -323,6 +326,10 @@ def read_statistics(ip: str, key: str = "", timeout: float = TIMEOUT):
     for enc in (0, 1):
         url = "http://%s/http-getStatistics.json?encrypted=%d" % (ip, enc)
         try:
+            # Without a prepare first, the appliance answers with every counter
+            # at 0. It needs a moment to fill them in afterwards.
+            _get("http://%s/http-prepareStatistics.json?encrypted=%d" % (ip, enc), timeout)
+            time.sleep(STATS_SETTLE)
             body = _get(url, timeout)
         except (urllib.error.URLError, socket.timeout, OSError) as exc:
             errors.append("%s: %s" % (url, exc))
