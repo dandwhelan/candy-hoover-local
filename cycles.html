@@ -42,8 +42,12 @@
          box-shadow:var(--shadow);margin-bottom:22px}
   .dot{width:10px;height:10px;border-radius:99px;background:var(--ok);flex:none;
        box-shadow:0 0 0 4px var(--ok-soft)}
-  .dot.busy{background:var(--warn);box-shadow:0 0 0 4px rgba(154,103,0,.15);
-            animation:pulse 1.6s ease-in-out infinite}
+  .dot.busy{background:var(--ok);box-shadow:0 0 0 4px var(--ok-soft);
+            animation:running 1.2s ease-in-out infinite}
+  @keyframes running{
+    0%,100%{opacity:1;box-shadow:0 0 0 4px var(--ok-soft),0 0 10px 1px var(--ok)}
+    50%{opacity:.25;box-shadow:0 0 0 4px var(--ok-soft),0 0 0 0 transparent}}
+  @media (prefers-reduced-motion:reduce){ .dot.busy{animation:none} }
   .dot.err{background:var(--bad);box-shadow:0 0 0 4px rgba(179,38,30,.15)}
   @keyframes pulse{50%{opacity:.35}}
   .state .who{font-weight:620}
