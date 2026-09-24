@@ -50,8 +50,17 @@ Without it, status and raw commands still work, but there's no cycle list.
 | `WASH_BIND` | `127.0.0.1` | Address to listen on. |
 | `WASH_PORT` | `8099` | Port to listen on. |
 
-The app writes `settings.json` (default appliance) and `profiles.json` (per-appliance
-model choice, button and cycle names) next to itself, so its folder must be writable.
+The app writes `settings.json` (default appliance), `profiles.json` (per-appliance
+model choice, button and cycle names) and `cycles.json` (the cycle in progress) next to
+itself, so its folder must be writable.
+
+### Cycle progress
+
+The appliance only reports time *left*, never time elapsed, so "% through" needs the
+cycle's start to have been seen. While it runs, the server checks the default appliance
+once a minute (skipped whenever a page is already polling) and remembers each cycle's
+full length across restarts. If it didn't see a cycle start, the page shows the finish
+time without a percentage rather than guess.
 
 ## Working out which model you have
 

@@ -271,6 +271,89 @@ def write_profile(ip, patch, reset=False):
     return prof
 
 
+CYCLES = os.path.join(HERE, "cycles.json")
+_cycle_lock = threading.Lock()
+_cycles = None            # canonical ip -> the cycle running on it
+_quiet = {}               # canonical ip -> last time it was seen idle or asleep
+_last_poll = {}           # canonical ip -> last status read, from any source
+WATCH_EVERY = 60          # seconds between background checks of the default appliance
+
+
+def _load_cycles():
+    global _cycles
+    if _cycles is None:
+        try:
+            with open(CYCLES, encoding="utf-8") as fh:
+                _cycles = json.load(fh)
+        except (OSError, ValueError):
+            _cycles = {}
+    return _cycles
+
+
+def track_cycle(ip, running, remaining, code):
+    """
+    Remember each cycle's full length. The appliance only reports time left,
+    never time elapsed, so the only way to know how far through a cycle is,
+    is to have seen it start. `from_start` says whether we did: true when this
+    machine was seen idle or asleep in the three minutes before the cycle
+    first showed up. State survives restarts via cycles.json.
+    """
+    key = profile_key(ip)
+    now = time.time()
+    with _cycle_lock:
+        cycles = _load_cycles()
+        _last_poll[key] = now
+        cur = cycles.get(key)
+        if not running or remaining is None:
+            _quiet[key] = now
+            if cur is not None:
+                cycles.pop(key)
+                _save_cycles(cycles)
+            return None
+        fresh = (cur is None or str(cur.get("code")) != str(code)
+                 or now - cur.get("seen", 0) > 3 * 3600
+                 or remaining > cur["total"] + 600)
+        if fresh:
+            cur = {"code": code, "total": remaining, "started": now,
+                   "from_start": now - _quiet.get(key, 0) <= 180, "seen": now}
+            cycles[key] = cur
+            _save_cycles(cycles)
+        else:
+            cur["seen"] = now
+            if remaining > cur["total"]:
+                cur["total"] = remaining
+                _save_cycles(cycles)
+        return {"total_seconds": cur["total"], "from_start": cur["from_start"],
+                "started": cur["started"]}
+
+
+def _save_cycles(cycles):
+    try:
+        with open(CYCLES, "w", encoding="utf-8") as fh:
+            json.dump(cycles, fh, indent=1)
+    except OSError:
+        pass
+
+
+def watch_default():
+    """Check the default appliance once a minute so a cycle's start is seen
+    even when no page is open. Skipped while a page is already polling."""
+    while True:
+        time.sleep(WATCH_EVERY)
+        ip = default_ip()
+        if not ip or time.time() - _last_poll.get(profile_key(ip), 0) < WATCH_EVERY - 15:
+            continue
+        try:
+            data, _ = cp.read_status(ip)
+            dec = cp.decode_status(cp.flatten_status(data))
+            track_cycle(ip, dec.get("running"), dec.get("remaining_seconds"),
+                        cp.flatten_status(data).get("PrCode"))
+        except Exception:
+            # asleep or unreachable: an idle machine, as far as cycle starts go
+            with _cycle_lock:
+                _quiet[profile_key(ip)] = _last_poll[profile_key(ip)] = time.time()
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -329,9 +412,13 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(400, {"error": "ip required"})
                 data, info = cp.read_status(ip, q.get("key", ""))
                 flat = cp.flatten_status(data)
+                decoded = cp.decode_status(flat)
                 return self._send(200, {
                     "status": data,
-                    "decoded": cp.decode_status(flat),
+                    "decoded": decoded,
+                    "cycle": track_cycle(ip, decoded.get("running"),
+                                         decoded.get("remaining_seconds"),
+                                         flat.get("PrCode")),
                     "type": info.get("type") or "unknown",
                     "encrypted": info["encrypted"],
                     "recovered_key": info.get("recovered_key") or "",
@@ -443,6 +530,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
+    threading.Thread(target=watch_default, daemon=True).start()
     ip = local_ipv4()
     print("Candy/Hoover local control")
     print("  this machine : %s" % ip)
