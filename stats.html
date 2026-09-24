@@ -5,15 +5,17 @@
 <style>
   :root{
     --bg:#f4f5f7; --panel:#fff; --ink:#14171c; --muted:#6b7280; --line:#e4e7ec;
-    --accent:#c8102e; --accent-soft:#fdecef; --ok:#1c7c4a; --chip:#f0f2f5;
-    --cold:#2563eb; --warm:#d97706; --hot:#c8102e; --grid:#eef0f3;
+    --accent:#0f766e; --accent-soft:#e6f4f2; --ok:#1c7c4a; --chip:#f0f2f5; --bad:#c8102e;
+    --dial:#0d9488; --remote:#7c3aed;
+    --cold:#3b82f6; --warm:#f59e0b; --hot:#e11d48; --grid:#eef0f3;
     --shadow:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   @media (prefers-color-scheme:dark){
     :root{ --bg:#0d0f13; --panel:#161a21; --ink:#e9ecf1; --muted:#98a2b3;
-           --line:#252a33; --accent:#ff5a72; --accent-soft:#2a151b; --ok:#5fd39b;
-           --chip:#1e232b; --cold:#60a5fa; --warm:#fbbf24; --hot:#ff5a72; --grid:#1d222a;
+           --line:#252a33; --accent:#2dd4bf; --accent-soft:#0f2a28; --ok:#5fd39b; --bad:#ff5a72;
+           --chip:#1e232b; --dial:#2dd4bf; --remote:#a78bfa;
+           --cold:#60a5fa; --warm:#fbbf24; --hot:#fb7185; --grid:#1d222a;
            --shadow:0 1px 2px rgba(0,0,0,.4); }
   }
   *{box-sizing:border-box}
@@ -57,9 +59,12 @@
   .bar .nm{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .bar .nm small{color:var(--muted);font:11px var(--mono);margin-right:6px}
   .bar .tr{height:12px;background:var(--chip);border-radius:6px;overflow:hidden}
-  .bar .fl{height:100%;background:var(--accent);border-radius:6px;transform-origin:left;
+  .bar .fl{height:100%;background:var(--dial);border-radius:6px;transform-origin:left;
            animation:grow .7s cubic-bezier(.2,.8,.2,1) both}
+  .bar.remote .fl{background:var(--remote)}
   .bar .n{font:12.5px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+  .key{display:flex;gap:14px;font-size:12.5px;color:var(--muted);margin:-4px 0 12px}
+  .key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
   @keyframes grow{from{transform:scaleX(0)}}
 
   /* identify */
@@ -70,7 +75,7 @@
                border-radius:8px;padding:6px 9px;min-width:0;flex:1 1 160px}
   .btn{font:13px system-ui,sans-serif;color:var(--ink);background:var(--chip);border:1px solid var(--line);
        border-radius:8px;padding:6px 11px;cursor:pointer}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--panel)}
 
   /* donut */
   .donut{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
@@ -95,7 +100,7 @@
   td{padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
   tr:last-child td{border-bottom:0}
   .note{font-size:12.5px;color:var(--muted);margin-top:4px}
-  .err{color:var(--accent);font-size:13.5px}
+  .err{color:var(--bad);font-size:13.5px}
   @media (prefers-reduced-motion:reduce){ .bar .fl{animation:none} }
 </style>
 
@@ -116,6 +121,7 @@
       <div>
         <h2>Most used cycles</h2>
         <p class="sub">Lifetime count kept by the washer itself, by dial position.</p>
+        <div class="key"><span><i style="background:var(--dial)"></i>On the dial</span><span><i style="background:var(--remote)"></i>Started remotely</span></div>
       </div>
       <button class="btn" id="identBtn" type="button">Identify a position</button>
     </div>
@@ -196,6 +202,13 @@ function posName(pos){
 const cycleName = c => (c.pos != null && profile.dial && profile.dial[c.pos] && profile.dial[c.pos].own)
   ? profile.dial[c.pos].label : (codeName(c.code) || (c.pos != null ? "Position " + c.pos : "Unknown"));
 
+// Positions past the physical dial are programs started from an app.
+const isRemote = pos => {
+  const d = profile.dial && profile.dial[pos];
+  if(d && d.remote != null) return !!d.remote;
+  return profile.dialSize ? +pos > profile.dialSize : false;
+};
+
 /* ---------------------------------------------------------------- tiles */
 function renderTiles(){
   const rows = counters ? Object.entries(counters).filter(([, n]) => n > 0) : [];
@@ -225,7 +238,7 @@ function renderBars(){
   if(!rows.length){ $("bars").innerHTML = '<div class="empty">The washer reported no cycles yet.</div>'; return; }
   const max = rows[0][1];
   $("bars").innerHTML = rows.map(([pos, n], i) =>
-    '<div class="bar' + (String(pos) === String(identPos) ? " here" : "") + '" data-pos="' + pos + '">' +
+    '<div class="bar' + (isRemote(pos) ? " remote" : "") + (String(pos) === String(identPos) ? " here" : "") + '" data-pos="' + pos + '">' +
       '<div class="nm" title="' + esc(posName(pos)) + '"><small>' + String(pos).padStart(2, "0") + "</small>" + esc(posName(pos)) + "</div>" +
       '<div class="tr"><div class="fl" style="width:' + (100 * n / max).toFixed(1) + "%;animation-delay:" + (i * 40) + 'ms"></div></div>' +
       '<div class="n">' + n + "</div></div>").join("");
@@ -286,7 +299,7 @@ function renderWeeks(){
     const bh = (h - pb - pt) * wk2.n / top, x = pl + i * bw + bw * .18, y = h - pb - bh;
     const d = new Date(wk2.t), lbl = d.getDate() + " " + d.toLocaleString([], {month: "short"});
     return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + (bw * .64).toFixed(1) + '" height="' + Math.max(0, bh).toFixed(1) +
-      '" rx="3" fill="' + (i === W - 1 ? "var(--accent)" : "var(--cold)") + '" opacity="' + (i === W - 1 ? 1 : .8) + '"><title>' + wk2.n + " cycles, week of " + lbl + "</title></rect>" +
+      '" rx="3" fill="var(--accent)" opacity="' + (i === W - 1 ? 1 : .55) + '"><title>' + wk2.n + " cycles, week of " + lbl + "</title></rect>" +
       (wk2.n ? '<text x="' + (x + bw * .32).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" style="fill:var(--ink)">' + wk2.n + "</text>" : "") +
       (i % 2 === 1 || W <= 6 ? '<text x="' + (x + bw * .32).toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle">' + lbl + "</text>" : "");
   }).join("");

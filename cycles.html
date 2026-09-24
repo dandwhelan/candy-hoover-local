@@ -309,8 +309,7 @@ function renderTimer(){
   const done = base ? Math.min(1, Math.max(0, 1 - left / total)) : 0;
   $("ringFill").style.strokeDashoffset = (326.7 * (1 - done)).toFixed(1);
 
-  const now = DB && live.PrCode !== undefined
-    ? nameOf(DB.programs.find(p => String(p.code) === String(live.PrCode))) || null : null;
+  const now = liveName();
   $("tProg").textContent = now || "Cycle running";
   $("tPhase").textContent = [dec.phase, dec.temperature_c != null ? dec.temperature_c + "°C" : null,
                              dec.spin_rpm ? dec.spin_rpm + " rpm" : null]
@@ -344,6 +343,31 @@ const programsOf = m => m.programs
   .filter(p => p && !isOff(p))
   .sort((a, b) => (a.sel ?? 99) - (b.sel ?? 99));
 
+// Your own dial, once its positions are named (Stats → Identify, or Learn my
+// dial). Each position sends *your* number as PrNm. Limits come from the
+// database only when the position's program code is known; otherwise the
+// cycle runs on the machine's own settings. Remote positions aren't offered.
+const DEFAULT = -1;
+function myDial(){
+  const d = (profile && profile.dial) || {}, size = profile && profile.dialSize;
+  return Object.keys(d)
+    .filter(pos => d[pos].own && !d[pos].remote && (!size || +pos <= size))
+    .sort((a, b) => a - b)
+    .map(pos => {
+      const e = d[pos];
+      const db = e.code != null && DB ? DB.programs.find(p => String(p.code) === String(e.code) && !isOff(p)) : null;
+      return Object.assign({}, db || {}, {serial: "dial-" + pos, sel: +pos, label: e.label,
+                           code: e.code ?? null, fromDial: true, known: !!db});
+    });
+}
+const cycleList = () => { const mine = myDial(); return mine.length ? mine : programsOf(model); };
+function liveName(){
+  const d = profile && profile.dial && profile.dial[live.Pr];
+  if(d && d.own) return d.label;
+  return DB && live.PrCode !== undefined
+    ? nameOf(DB.programs.find(p => String(p.code) === String(live.PrCode))) || null : null;
+}
+
 // Whatever the machine currently reports for option bit N (status field OptN).
 const live_opt = bit => live["Opt" + bit];
 
@@ -355,8 +379,7 @@ function renderState(){
     ? model.model + (model.type ? " · " + model.type.replace("_", "-") : "")
     : "Washing machine";
 
-  const now = DB && live.PrCode !== undefined
-    ? nameOf(DB.programs.find(p => String(p.code) === String(live.PrCode))) || null : null;
+  const now = liveName();
   const bits = [];
   if(err) bits.push("Error " + dec.error);
   else bits.push(dec.machine_state || "—");
@@ -378,14 +401,18 @@ function renderState(){
 }
 
 function renderGrid(){
-  const list = programsOf(model);
-  $("lead").textContent = list.length + " cycles";
+  const list = cycleList();
+  const mine = list.length && list[0].fromDial;
+  $("lead").textContent = list.length + (mine ? " cycles on your dial" : " cycles");
+  $("modelPick").hidden = !!mine;
   $("grid").innerHTML = list.map(p => {
     const bits = [];
+    if(p.fromDial && !p.known) bits.push("machine's settings");
     if(p.temp !== undefined) bits.push(p.temp === 0 ? "Cold" : p.temp + "°C");
     if(p.spin) bits.push(p.spin + " rpm");
     if(p.duration) bits.push(p.duration + " min");
-    const isLive = String(p.code) === String(live.PrCode);
+    const isLive = p.fromDial ? String(p.sel) === String(live.Pr)
+                              : String(p.code) === String(live.PrCode);
     return '<button class="cyc" data-s="' + p.serial + '" aria-pressed="' +
       (chosen && chosen.serial === p.serial) + '">' +
       (isLive ? '<span class="live">ON DIAL</span>'
@@ -396,7 +423,7 @@ function renderGrid(){
       "</button>";
   }).join("");
   $("grid").querySelectorAll(".cyc").forEach(b => {
-    b.onclick = () => choose(DB.programs.find(p => p.serial === +b.dataset.s));
+    b.onclick = () => choose(list.find(p => String(p.serial) === b.dataset.s));
   });
 }
 
@@ -409,6 +436,8 @@ function chips(id, values, current, fmt){
 function renderSheet(){
   if(!chosen){ $("sheet").innerHTML = ""; $("bar").hidden = true; return; }
   const p = chosen;
+  // a dial cycle can always run on the machine's own settings
+  const dflt = p.fromDial ? [DEFAULT] : [];
   const tmax = p.tempMax !== undefined ? p.tempMax : 90;
   const smax = p.spinMax || 1400;
   const lo = p.soilMin ?? 0, hi = p.soilMax ?? 0;
@@ -432,11 +461,11 @@ function renderSheet(){
       'min-width:0">Rename</button>' +
       "</div></div></header><div class='opts'>" +
       '<div class="opt"><div class="t">Temperature</div>' +
-        chips("temp", TEMPS.filter(t => t <= tmax), sel.temp,
-              v => v === 0 ? "Cold" : v + "°") + "</div>" +
+        chips("temp", dflt.concat(TEMPS.filter(t => t <= tmax)), sel.temp,
+              v => v === DEFAULT ? "Machine default" : v === 0 ? "Cold" : v + "°") + "</div>" +
       '<div class="opt"><div class="t">Spin speed</div>' +
-        chips("spin", SPINS.filter(v => v <= smax), sel.spin,
-              v => v === 0 ? "No spin" : v) + "</div>" +
+        chips("spin", dflt.concat(SPINS.filter(v => v <= smax)), sel.spin,
+              v => v === DEFAULT ? "Machine default" : v === 0 ? "No spin" : v) + "</div>" +
       '<div class="opt"><div class="t">Soil level</div>' + soilBlock + "</div>" +
       '<div class="opt"><div class="t">Delay start</div>' +
         chips("delay", DELAYS, sel.delay,
@@ -453,10 +482,20 @@ function renderSheet(){
   const renamer = $("progName");
   if(renamer) renamer.onclick = async () => {
     const name = prompt("What is this cycle called on your machine's panel? " +
-                        "Leave empty to go back to \"" + p.label + "\".", nameOf(p));
+                        (p.fromDial ? "" : "Leave empty to go back to \"" + p.label + "\"."),
+                        p.fromDial ? p.label : nameOf(p));
     if(name === null) return;
-    const patch = {}; patch[p.code] = name.trim();
-    profile = await api("/api/profile/save", {ip: IP, names: JSON.stringify(patch)});
+    let saved;
+    if(p.fromDial){
+      if(!name.trim()) return;       // a dial position keeps a name; rename it instead
+      const entry = {}; entry[p.sel] = Object.assign({}, profile.dial[p.sel], {label: name.trim(), own: true});
+      saved = {ip: IP, dial: JSON.stringify(entry)};
+    }else{
+      const patch = {}; patch[p.code] = name.trim();
+      saved = {ip: IP, names: JSON.stringify(patch)};
+    }
+    profile = await api("/api/profile/save", saved);
+    chosen = cycleList().find(x => String(x.serial) === String(p.serial)) || chosen;
     renderGrid(); renderSheet(); renderState(); renderTimer();
   };
   const namer = $("optName");
@@ -494,9 +533,9 @@ function build(){
   let s = "Write=1&Pa=0&Sel=0&PrNm=" + (p.sel ?? 0);
   if(sel.delay > 0) s += "&DelMd=1&DelVl=" + sel.delay;
   s += "&StSt=1";
-  if(sel.temp !== null) s += "&TmpTgt=" + sel.temp + "&TmpDf=" + sel.temp;
+  if(sel.temp !== null && sel.temp !== DEFAULT) s += "&TmpTgt=" + sel.temp + "&TmpDf=" + sel.temp;
   if(sel.soil !== null && (p.soilMax ?? 0) > 0) s += "&SLevTgt=" + sel.soil;
-  if(sel.spin !== null){
+  if(sel.spin !== null && sel.spin !== DEFAULT){
     const w = Math.round(sel.spin / 100);
     s += "&SpdTgt=" + w + "&SpdDef=" + w;
   }
@@ -508,8 +547,8 @@ function build(){
 function renderBar(){
   if(!chosen){ $("bar").hidden = true; return; }
   $("bar").hidden = false;
-  const bits = [sel.temp === 0 ? "Cold" : sel.temp + "°C"];
-  if(sel.spin !== null) bits.push(sel.spin === 0 ? "no spin" : sel.spin + " rpm");
+  const bits = [sel.temp === DEFAULT ? "machine's temperature" : sel.temp === 0 ? "Cold" : sel.temp + "°C"];
+  if(sel.spin !== null) bits.push(sel.spin === DEFAULT ? "machine's spin" : sel.spin === 0 ? "no spin" : sel.spin + " rpm");
   if(sel.soil !== null && (chosen.soilMax ?? 0) > 0) bits.push((SOIL[sel.soil] || "").toLowerCase());
   if(sel.delay > 0) bits.push("in " + (sel.delay / 60) + " h");
   const on = allowedBits(chosen).filter(b => sel.opts >> (b - 1) & 1);
@@ -520,9 +559,10 @@ function renderBar(){
 
 function choose(p){
   chosen = p;
+  // your own dial cycles start on the machine's settings; change them if you want
   sel = {
-    temp: p.temp !== undefined ? p.temp : 40,
-    spin: p.spin !== undefined ? p.spin : 1000,
+    temp: p.fromDial ? DEFAULT : p.temp !== undefined ? p.temp : 40,
+    spin: p.fromDial ? DEFAULT : p.spin !== undefined ? p.spin : 1000,
     soil: (p.soilMax ?? 0) > 0 ? (p.soil ?? p.soilMax) : null,
     steam: 0, delay: 0,
     opts: allowedBits(p).reduce(

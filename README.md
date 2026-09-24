@@ -101,9 +101,16 @@ closest *program set*, not identified exactly. Two things put that right:
   always the same. If the picker says "Resistant Cottons" while your panel says
   "Eco Cottons", tap the cycle and press **Rename**. Your name is used everywhere from
   then on.
-- **Learn my dial** (advanced view). Turn the knob one position at a time and press
-  Capture. The machine reports its own program code at each stop, which builds a map of
-  your actual machine.
+- **Name your dial** (Stats → **Identify a position**, or **Learn my dial** in the
+  advanced view). Turn the knob and type the name printed at each position. Once your
+  dial has names, the cycle picker offers only those cycles and sends *your* position
+  numbers, since another model's positions can start a different program on your
+  machine. Cycles whose program code isn't known yet run on the machine's own
+  temperature and spin ("Machine default").
+
+Positions past the end of the physical dial belong to cycles started from an app. Set
+the dial size (`dial_size` on `/api/profile/save`) and the Stats page colours those
+separately.
 
 ### Options (Prewash, Zoom, extra rinse, …)
 

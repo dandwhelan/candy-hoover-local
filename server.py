@@ -609,6 +609,12 @@ class Handler(BaseHTTPRequestHandler):
                         patch["options"] = json.loads(q["options"])
                     except ValueError:
                         return self._send(400, {"error": "options must be JSON"})
+                if q.get("dial_size"):
+                    try:
+                        # positions on the physical knob; higher ones are app-started
+                        patch["dialSize"] = int(q["dial_size"])
+                    except ValueError:
+                        return self._send(400, {"error": "dial_size must be a number"})
                 if q.get("names"):
                     try:
                         patch["names"] = json.loads(q["names"])
