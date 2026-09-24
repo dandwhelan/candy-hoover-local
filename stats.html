@@ -1,0 +1,379 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wash — stats</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#fff; --ink:#14171c; --muted:#6b7280; --line:#e4e7ec;
+    --accent:#c8102e; --accent-soft:#fdecef; --ok:#1c7c4a; --chip:#f0f2f5;
+    --cold:#2563eb; --warm:#d97706; --hot:#c8102e; --grid:#eef0f3;
+    --shadow:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0d0f13; --panel:#161a21; --ink:#e9ecf1; --muted:#98a2b3;
+           --line:#252a33; --accent:#ff5a72; --accent-soft:#2a151b; --ok:#5fd39b;
+           --chip:#1e232b; --cold:#60a5fa; --warm:#fbbf24; --hot:#ff5a72; --grid:#1d222a;
+           --shadow:0 1px 2px rgba(0,0,0,.4); }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 20px 80px}
+  .top{display:flex;align-items:center;justify-content:space-between;
+       gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  h1{font-size:22px;margin:0;font-weight:680;letter-spacing:-.02em}
+  .topbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .link{font-size:13px;color:var(--muted);text-decoration:none;font-family:inherit;
+        border:1px solid var(--line);padding:7px 12px;border-radius:8px;
+        background:var(--panel);cursor:pointer}
+  .link:hover{border-color:var(--muted)}
+  .link[aria-current="page"]{color:var(--ink);border-color:var(--ink)}
+  .link:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+        padding:14px 16px;box-shadow:var(--shadow);min-width:0}
+  .tile .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .tile .v{font-size:28px;font-weight:700;letter-spacing:-.02em;margin-top:2px;
+           font-variant-numeric:tabular-nums;line-height:1.2;overflow-wrap:anywhere}
+  .tile .s{font-size:13px;color:var(--muted);margin-top:2px}
+
+  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  @media (max-width:760px){ .grid2{grid-template-columns:1fr} }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+        padding:16px 18px;box-shadow:var(--shadow);margin-bottom:14px;min-width:0}
+  .card h2{font-size:15px;margin:0 0 2px;font-weight:650}
+  .card .sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+  .card .head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+  .empty{color:var(--muted);font-size:13.5px;padding:18px 0 6px;text-align:center}
+
+  /* most-used bars */
+  .bars{display:flex;flex-direction:column;gap:7px}
+  .bar{display:grid;grid-template-columns:minmax(0,170px) 1fr 44px;gap:10px;align-items:center;
+       border-radius:8px;padding:3px 4px;transition:background .2s}
+  .bar.here{background:var(--accent-soft)}
+  .bar .nm{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .nm small{color:var(--muted);font:11px var(--mono);margin-right:6px}
+  .bar .tr{height:12px;background:var(--chip);border-radius:6px;overflow:hidden}
+  .bar .fl{height:100%;background:var(--accent);border-radius:6px;transform-origin:left;
+           animation:grow .7s cubic-bezier(.2,.8,.2,1) both}
+  .bar .n{font:12.5px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+  @keyframes grow{from{transform:scaleX(0)}}
+
+  /* identify */
+  .ident{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;
+         padding:10px 12px;border:1px dashed var(--line);border-radius:10px;font-size:13.5px}
+  .ident[hidden]{display:none}
+  .ident input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);
+               border-radius:8px;padding:6px 9px;min-width:0;flex:1 1 160px}
+  .btn{font:13px system-ui,sans-serif;color:var(--ink);background:var(--chip);border:1px solid var(--line);
+       border-radius:8px;padding:6px 11px;cursor:pointer}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  /* donut */
+  .donut{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  .donut svg{width:150px;height:150px;flex:none}
+  .legend{display:flex;flex-direction:column;gap:8px;font-size:13.5px}
+  .legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:-1px}
+  .legend b{font-variant-numeric:tabular-nums}
+
+  svg text{fill:var(--muted);font:11px system-ui,sans-serif}
+  .chart{width:100%;height:auto;display:block}
+
+  /* heatmap */
+  .heat{display:grid;grid-template-columns:34px repeat(24,1fr);gap:2px;font-size:10.5px;color:var(--muted)}
+  .heat .c{aspect-ratio:1;border-radius:3px;background:var(--chip)}
+  .heat .l{display:flex;align-items:center}
+  .heat .h{text-align:center}
+
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;
+     letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:0}
+  .note{font-size:12.5px;color:var(--muted);margin-top:4px}
+  .err{color:var(--accent);font-size:13.5px}
+  @media (prefers-reduced-motion:reduce){ .bar .fl{animation:none} }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <h1>Stats</h1>
+    <div class="topbar">
+      <a class="link" href="/" id="toCycles">Cycles</a>
+      <a class="link" href="/stats" aria-current="page">Stats</a>
+      <a class="link" href="/advanced" id="toAdv">Advanced view</a>
+    </div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <div class="head">
+      <div>
+        <h2>Most used cycles</h2>
+        <p class="sub">Lifetime count kept by the washer itself, by dial position.</p>
+      </div>
+      <button class="btn" id="identBtn" type="button">Identify a position</button>
+    </div>
+    <div class="bars" id="bars"><div class="empty">Reading the washer…</div></div>
+    <div class="ident" id="ident" hidden>
+      <span id="identNow">Turn the dial on the machine…</span>
+      <input id="identName" placeholder="Name on the dial, e.g. Whites" aria-label="Name for this dial position">
+      <button class="btn primary" id="identSave" type="button">Save name</button>
+      <button class="btn" id="identDone" type="button">Done</button>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Cycles per week</h2>
+      <p class="sub" id="weekSub">Last 12 weeks</p>
+      <div id="weeks"></div>
+    </div>
+    <div class="card">
+      <h2>Wash temperature</h2>
+      <p class="sub">Lifetime, from the washer’s counters.</p>
+      <div id="temps"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>When you wash</h2>
+    <p class="sub">Cycle start times by day and hour.</p>
+    <div id="heat"></div>
+  </div>
+
+  <div class="card">
+    <h2>Recent cycles</h2>
+    <p class="sub">Logged by this app since it started keeping a history.</p>
+    <div class="tbl-wrap" id="recent"></div>
+  </div>
+</div>
+
+<script>
+let IP = new URLSearchParams(location.search).get("ip") || "";
+let profile = {dial:{}}, DB = null, counters = null, temps = null, hist = {cycles:[], snapshots:[]}, live = {};
+let identTimer = null, identPos = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function api(path, params){
+  const qs = new URLSearchParams(params || {}).toString();
+  const r = await fetch(path + (qs ? "?" + qs : ""));
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const flat = obj => { const o = {}; for(const v of Object.values(obj || {})) if(v && typeof v === "object") Object.assign(o, v); return o; };
+const fmtDur = s => { if(s == null) return "—"; const m = Math.round(s / 60); return m >= 60 ? Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m" : m + " min"; };
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+/* --------------------------------------------------------------- naming
+   A dial position's name, best source first: one you gave it here or in
+   "Learn my dial", then the name of the program code logged running on it
+   (which honours cycle renames), else just its number.                  */
+function codeName(code){
+  if(code == null) return null;
+  if(profile.names && profile.names[code]) return profile.names[code];
+  const p = DB && DB.programs.find(x => String(x.code) === String(code));
+  return p ? p.label : null;
+}
+function posCode(pos){
+  const d = profile.dial && profile.dial[pos];
+  if(d && d.code != null) return d.code;
+  const hit = [...hist.cycles].reverse().find(c => String(c.pos) === String(pos) && c.code != null);
+  return hit ? hit.code : null;
+}
+function posName(pos){
+  const d = profile.dial && profile.dial[pos];
+  if(d && d.own) return d.label;
+  return codeName(posCode(pos)) || (d && d.label) || "Position " + pos;
+}
+const cycleName = c => (c.pos != null && profile.dial && profile.dial[c.pos] && profile.dial[c.pos].own)
+  ? profile.dial[c.pos].label : (codeName(c.code) || (c.pos != null ? "Position " + c.pos : "Unknown"));
+
+/* ---------------------------------------------------------------- tiles */
+function renderTiles(){
+  const rows = counters ? Object.entries(counters).filter(([, n]) => n > 0) : [];
+  const total = rows.reduce((a, [, n]) => a + n, 0);
+  const top = rows.sort((a, b) => b[1] - a[1])[0];
+  const timed = hist.cycles.filter(c => c.duration);
+  const avg = timed.length ? timed.reduce((a, c) => a + c.duration, 0) / timed.length : null;
+  const tsum = temps ? temps.cold + temps.warm + temps.hot : 0;
+  const lastFill = live.FillR != null && live.MachMd == "2" ? +live.FillR
+                 : (hist.cycles.length ? hist.cycles[hist.cycles.length - 1].fill : null);
+  const tiles = [
+    ["Lifetime cycles", counters ? total.toLocaleString() : "…", "counted by the washer"],
+    ["Favourite", top ? posName(top[0]) : "…", top ? top[1] + " cycles · " + Math.round(100 * top[1] / total) + "%" : ""],
+    ["Average cycle", fmtDur(avg), timed.length ? "over " + timed.length + " logged cycle" + (timed.length === 1 ? "" : "s") : "fills in as cycles are logged"],
+    ["Last load", lastFill != null ? lastFill + "%" : "—", "drum fill"],
+    ["Hot washes", tsum ? Math.round(100 * temps.hot / tsum) + "%" : "…", "at 60–90 °C"],
+  ];
+  $("tiles").innerHTML = tiles.map(([k, v, s]) =>
+    '<div class="tile"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) +
+    '</div><div class="s">' + esc(s) + "</div></div>").join("");
+}
+
+/* ------------------------------------------------------------ most used */
+function renderBars(){
+  if(!counters){ return; }
+  const rows = Object.entries(counters).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  if(!rows.length){ $("bars").innerHTML = '<div class="empty">The washer reported no cycles yet.</div>'; return; }
+  const max = rows[0][1];
+  $("bars").innerHTML = rows.map(([pos, n], i) =>
+    '<div class="bar' + (String(pos) === String(identPos) ? " here" : "") + '" data-pos="' + pos + '">' +
+      '<div class="nm" title="' + esc(posName(pos)) + '"><small>' + String(pos).padStart(2, "0") + "</small>" + esc(posName(pos)) + "</div>" +
+      '<div class="tr"><div class="fl" style="width:' + (100 * n / max).toFixed(1) + "%;animation-delay:" + (i * 40) + 'ms"></div></div>' +
+      '<div class="n">' + n + "</div></div>").join("");
+}
+
+/* ---------------------------------------------------------- temperature */
+function renderTemps(){
+  if(!temps){ $("temps").innerHTML = '<div class="empty">Reading the washer…</div>'; return; }
+  const parts = [["Up to 30 °C", temps.cold, "var(--cold)"], ["40 °C", temps.warm, "var(--warm)"], ["60–90 °C", temps.hot, "var(--hot)"]];
+  const sum = parts.reduce((a, p) => a + p[1], 0);
+  if(!sum){ $("temps").innerHTML = '<div class="empty">No temperature counts yet.</div>'; return; }
+  const R = 52, C = 2 * Math.PI * R;
+  let off = 0;
+  const arcs = parts.map(([, n, col]) => {
+    const len = C * n / sum;
+    const a = '<circle cx="70" cy="70" r="' + R + '" fill="none" stroke="' + col + '" stroke-width="18" stroke-dasharray="' +
+      Math.max(0, len - 2).toFixed(2) + " " + C.toFixed(2) + '" stroke-dashoffset="' + (-off).toFixed(2) + '"/>';
+    off += len; return a;
+  }).join("");
+  const lead = parts.slice().sort((a, b) => b[1] - a[1])[0];
+  $("temps").innerHTML = '<div class="donut"><svg viewBox="0 0 140 140" role="img" aria-label="Temperature split">' +
+      '<g transform="rotate(-90 70 70)">' + arcs + "</g>" +
+      '<text x="70" y="68" text-anchor="middle" style="font-size:20px;font-weight:700;fill:var(--ink)">' + Math.round(100 * lead[1] / sum) + "%</text>" +
+      '<text x="70" y="86" text-anchor="middle">' + esc(lead[0]) + "</text></svg>" +
+    '<div class="legend">' + parts.map(([l, n, col]) =>
+      '<div><span class="sw" style="background:' + col + '"></span>' + esc(l) + " · <b>" + Math.round(100 * n / sum) + "%</b></div>").join("") +
+    '<div class="note">Counts heating runs, so the total is higher than the cycle count.</div></div></div>';
+}
+
+/* -------------------------------------------------------- cycles / week */
+function weekStart(t){ const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); }
+function renderWeeks(){
+  const W = 12, now = weekStart(Date.now()), wk = 7 * 864e5;
+  const weeks = Array.from({length: W}, (_, i) => ({t: now - (W - 1 - i) * wk, n: 0}));
+  let source = "logged cycles";
+  for(const c of hist.cycles){ const w = weeks.find(x => x.t === weekStart(c.started * 1000)); if(w) w.n++; }
+  // before our own log covers the range, lifetime-counter snapshots show usage too
+  const snaps = hist.snapshots;
+  if(!hist.cycles.length && snaps.length > 1){
+    source = "washer counter snapshots";
+    const tot = s => Object.values(s.programs).reduce((a, n) => a + (n || 0), 0);
+    for(let i = 1; i < snaps.length; i++){
+      const w = weeks.find(x => x.t === weekStart(snaps[i].t * 1000));
+      if(w) w.n += Math.max(0, tot(snaps[i]) - tot(snaps[i - 1]));
+    }
+  }
+  const max = Math.max(...weeks.map(w => w.n));
+  if(!max){ $("weeks").innerHTML = '<div class="empty">Starts filling in from today. Every cycle the washer runs from now on is logged here.</div>'; $("weekSub").textContent = "Last 12 weeks"; return; }
+  $("weekSub").textContent = "Last 12 weeks · from " + source;
+  const w = 520, h = 190, pl = 26, pb = 24, pt = 10, bw = (w - pl) / W;
+  const step = Math.max(1, Math.ceil(max / 4)), top = step * 4;
+  let g = "";
+  for(let v = 0; v <= top; v += step){
+    const y = h - pb - (h - pb - pt) * v / top;
+    g += '<line x1="' + pl + '" x2="' + w + '" y1="' + y + '" y2="' + y + '" stroke="var(--grid)"/><text x="' + (pl - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + v + "</text>";
+  }
+  const bars = weeks.map((wk2, i) => {
+    const bh = (h - pb - pt) * wk2.n / top, x = pl + i * bw + bw * .18, y = h - pb - bh;
+    const d = new Date(wk2.t), lbl = d.getDate() + " " + d.toLocaleString([], {month: "short"});
+    return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + (bw * .64).toFixed(1) + '" height="' + Math.max(0, bh).toFixed(1) +
+      '" rx="3" fill="' + (i === W - 1 ? "var(--accent)" : "var(--cold)") + '" opacity="' + (i === W - 1 ? 1 : .8) + '"><title>' + wk2.n + " cycles, week of " + lbl + "</title></rect>" +
+      (wk2.n ? '<text x="' + (x + bw * .32).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" style="fill:var(--ink)">' + wk2.n + "</text>" : "") +
+      (i % 2 === 1 || W <= 6 ? '<text x="' + (x + bw * .32).toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle">' + lbl + "</text>" : "");
+  }).join("");
+  $("weeks").innerHTML = '<svg class="chart" viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="Cycles per week">' + g + bars + "</svg>";
+}
+
+/* ---------------------------------------------------------- when (heat) */
+function renderHeat(){
+  if(!hist.cycles.length){ $("heat").innerHTML = '<div class="empty">Shows up once a few cycles have been logged.</div>'; return; }
+  const m = Array.from({length: 7}, () => Array(24).fill(0));
+  for(const c of hist.cycles){ const d = new Date(c.started * 1000); m[(d.getDay() + 6) % 7][d.getHours()]++; }
+  const max = Math.max(1, ...m.flat());
+  let html = '<div class="heat"><div></div>' + Array.from({length: 24}, (_, h) => '<div class="h">' + (h % 3 === 0 ? h : "") + "</div>").join("");
+  m.forEach((row, d) => {
+    html += '<div class="l">' + DAYS[d] + "</div>" + row.map((n, h) =>
+      '<div class="c" title="' + DAYS[d] + " " + String(h).padStart(2, "0") + ":00 · " + n + ' cycles" style="' +
+      (n ? "background:color-mix(in srgb, var(--accent) " + Math.round(20 + 80 * n / max) + "%, var(--chip))" : "") + '"></div>').join("");
+  });
+  $("heat").innerHTML = html + "</div>";
+}
+
+/* --------------------------------------------------------------- recent */
+function renderRecent(){
+  const rows = hist.cycles.slice(-15).reverse();
+  if(!rows.length){ $("recent").innerHTML = '<div class="empty">No finished cycles logged yet. The one running now will be the first.</div>'; return; }
+  $("recent").innerHTML = "<table><thead><tr><th>Started</th><th>Cycle</th><th>Took</th><th>Temp</th><th>Spin</th><th>Load</th></tr></thead><tbody>" +
+    rows.map(c => {
+      const d = new Date(c.started * 1000);
+      return "<tr><td>" + esc(d.toLocaleDateString([], {weekday: "short", day: "numeric", month: "short"}) + " " +
+        d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})) + "</td><td>" + esc(cycleName(c)) + "</td><td>" +
+        (c.duration ? fmtDur(c.duration) : '<span title="Started before it was being watched">~' + fmtDur(c.ended - c.started) + "+</span>") +
+        "</td><td>" + (c.temp != null ? c.temp + " °C" : "—") + "</td><td>" + (c.spin ? c.spin + " rpm" : "—") +
+        "</td><td>" + (c.fill != null ? c.fill + "%" : "—") + "</td></tr>";
+    }).join("") + "</tbody></table>";
+}
+
+function renderAll(){ renderTiles(); renderBars(); renderTemps(); renderWeeks(); renderHeat(); renderRecent(); }
+
+/* ------------------------------------------------------------- identify */
+async function identTick(){
+  try{
+    const j = await api("/api/status", {ip: IP});
+    live = flat(j.status);
+    identPos = live.Pr != null ? +live.Pr : null;
+    $("identNow").textContent = identPos ? "The dial is on position " + identPos + " (" + posName(identPos) + ")." :
+      "The machine isn’t reporting a dial position. Is it switched on?";
+    renderBars();
+  }catch(e){ $("identNow").textContent = "The washer isn’t answering. Press a button on it to wake it."; }
+}
+$("identBtn").onclick = () => {
+  $("ident").hidden = false; $("identName").value = "";
+  identTick(); clearInterval(identTimer); identTimer = setInterval(identTick, 3000);
+};
+$("identDone").onclick = () => { $("ident").hidden = true; clearInterval(identTimer); identPos = null; renderBars(); };
+$("identSave").onclick = async () => {
+  const name = $("identName").value.trim();
+  if(!identPos || !name) return;
+  const entry = {}; entry[identPos] = {label: name, own: true, code: live.PrCode ?? null};
+  profile = await api("/api/profile/save", {ip: IP, dial: JSON.stringify(entry)});
+  $("identName").value = "";
+  renderAll(); identTick();
+};
+
+/* ------------------------------------------------------------------ boot */
+async function boot(){
+  if(!IP){ try{ IP = (await api("/api/settings")).ip || ""; }catch(e){} }
+  if(IP){ $("toCycles").href = "/?ip=" + encodeURIComponent(IP); $("toAdv").href = "/advanced?ip=" + encodeURIComponent(IP); }
+  renderAll();
+  if(!IP){ $("bars").innerHTML = '<div class="err">No washer set up yet. Pick one on the Cycles page and press Save as default.</div>'; return; }
+  const [prof, db, h] = await Promise.all([
+    api("/api/profile", {ip: IP}).catch(() => ({dial: {}})),
+    fetch("/programs.json").then(r => r.ok ? r.json() : null).catch(() => null),
+    api("/api/history", {ip: IP}).catch(() => ({cycles: [], snapshots: []})),
+  ]);
+  profile = prof || {dial: {}}; DB = db; hist = h;
+  renderAll();
+  api("/api/status", {ip: IP}).then(j => { live = flat(j.status); renderTiles(); }).catch(() => {});
+  try{
+    const s = flat((await api("/api/statistics", {ip: IP})).statistics);
+    counters = {}; for(const [k, v] of Object.entries(s)) if(/^Program\d+$/.test(k)) counters[k.slice(7)] = +v || 0;
+    temps = {cold: +s.Temp0to30 || 0, warm: +s.Temp40 || 0, hot: +s.Temp60to90 || 0};
+    hist = await api("/api/history", {ip: IP}).catch(() => hist);
+  }catch(e){
+    $("bars").innerHTML = '<div class="err">Couldn’t read the counters: ' + esc(e.message) + ". The washer may be asleep. Press a button on it and reload.</div>";
+    $("temps").innerHTML = "";
+  }
+  renderAll();
+}
+boot();
+</script>

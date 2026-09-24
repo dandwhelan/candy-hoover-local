@@ -7,6 +7,9 @@ there's nothing to install.
 
 - A graphical **cycle picker**: tap a cycle, set temperature, spin, soil, extras and delay,
   then start it. While a cycle runs you get a live countdown and finish time.
+- A **stats page**: the washer's own lifetime counters (most-used cycles, wash
+  temperatures) plus a log of every cycle the app sees, with weekly activity, time of
+  day, average cycle length and load.
 - An **advanced view**: network scan, raw status, raw commands, and dial learning.
 - Works with appliances that answer in plaintext or in their XOR "encrypted" mode. The key
   is worked out from a single reply, so you never need to pull it off your phone.
@@ -51,8 +54,9 @@ Without it, status and raw commands still work, but there's no cycle list.
 | `WASH_PORT` | `8099` | Port to listen on. |
 
 The app writes `settings.json` (default appliance), `profiles.json` (per-appliance
-model choice, button and cycle names) and `cycles.json` (the cycle in progress) next to
-itself, so its folder must be writable.
+model choice, button and cycle names), `cycles.json` (the cycle in progress) and
+`history.json` (finished cycles and counter snapshots) next to itself, so its folder must
+be writable.
 
 ### Cycle progress
 
@@ -61,6 +65,20 @@ cycle's start to have been seen. While it runs, the server checks the default ap
 once a minute (skipped whenever a page is already polling) and remembers each cycle's
 full length across restarts. If it didn't see a cycle start, the page shows the finish
 time without a percentage rather than guess.
+
+### Stats
+
+The washer keeps lifetime counters: cycles per dial position, and heating runs by
+temperature band. Read them with `http-prepareStatistics.json` then, a couple of seconds
+later, `http-getStatistics.json`. Skip the prepare and every counter reads 0. The
+server also snapshots them every six hours, and logs each finished cycle it sees
+(start, end, temperature, spin, soil, load). Average length only counts cycles it saw
+from the start.
+
+Counters are by *dial position*, and machines outside the database don't say what's on
+each one. On the Stats page, press **Identify a position**, turn the knob, and type the
+name printed on the dial. A position also picks up a name from any cycle you've renamed
+that ran on it.
 
 ## Working out which model you have
 
@@ -166,6 +184,7 @@ dial number against your machine before starting a cycle.
 | `candy_protocol.py` | The protocol: cipher, key recovery, read/write. Import it for your own automation. |
 | `server.py` | Local HTTP server: serves the UI and proxies to the appliance. |
 | `cycles.html` | The cycle picker (default view). |
+| `stats.html` | Lifetime counters and cycle history, as charts. |
 | `index.html` | Advanced view: scan, raw status, raw commands, dial learning. |
 | `extract_programs.py` | Builds `programs.json` from the app's program database. |
 | `mock_appliance.py` | A fake appliance for testing without hardware. |

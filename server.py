@@ -271,35 +271,84 @@ def write_profile(ip, patch, reset=False):
     return prof
 
 
-CYCLES = os.path.join(HERE, "cycles.json")
+CYCLES = os.path.join(HERE, "cycles.json")      # the cycle in progress, per appliance
+HISTORY = os.path.join(HERE, "history.json")    # finished cycles + counter snapshots
 _cycle_lock = threading.Lock()
 _cycles = None            # canonical ip -> the cycle running on it
 _quiet = {}               # canonical ip -> last time it was seen idle or asleep
 _last_poll = {}           # canonical ip -> last status read, from any source
 WATCH_EVERY = 60          # seconds between background checks of the default appliance
+SNAPSHOT_EVERY = 6 * 3600 # seconds between lifetime-counter snapshots
+HISTORY_MAX = 5000        # finished cycles kept
+SNAPSHOT_MAX = 1500       # counter snapshots kept (about a year at 6-hourly)
+
+
+def _read_json(path, empty):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return empty
+
+
+def _write_json(path, data):
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=1, ensure_ascii=False)
+        os.replace(tmp, path)
+    except OSError:
+        pass
 
 
 def _load_cycles():
     global _cycles
     if _cycles is None:
-        try:
-            with open(CYCLES, encoding="utf-8") as fh:
-                _cycles = json.load(fh)
-        except (OSError, ValueError):
-            _cycles = {}
+        _cycles = _read_json(CYCLES, {})
     return _cycles
 
 
-def track_cycle(ip, running, remaining, code):
+def read_history():
+    h = _read_json(HISTORY, {})
+    h.setdefault("cycles", [])
+    h.setdefault("snapshots", [])
+    return h
+
+
+def _num(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _finish(key, cur, now):
+    """Move a finished cycle from cycles.json into the history log."""
+    # a machine that went to sleep straight after finishing is noticed late:
+    # it can't have ended later than its last reported time-left ran out
+    ended = min(now, cur.get("seen", now) + (cur.get("left") or 0) + 120)
+    entry = {k: cur.get(k) for k in ("code", "pos", "temp", "spin", "fill", "soil")}
+    entry.update({"ip": key, "started": round(cur["started"]), "ended": round(ended),
+                  "estimate": cur["total"], "from_start": cur["from_start"],
+                  "duration": round(ended - cur["started"]) if cur["from_start"] else None})
+    h = read_history()
+    h["cycles"] = (h["cycles"] + [entry])[-HISTORY_MAX:]
+    _write_json(HISTORY, h)
+
+
+def track_cycle(ip, flat, dec):
     """
-    Remember each cycle's full length. The appliance only reports time left,
-    never time elapsed, so the only way to know how far through a cycle is,
-    is to have seen it start. `from_start` says whether we did: true when this
-    machine was seen idle or asleep in the three minutes before the cycle
-    first showed up. State survives restarts via cycles.json.
+    Remember each cycle's full length, and log it once it finishes.
+
+    The appliance only reports time left, never time elapsed, so the only way
+    to know how far through a cycle is, is to have seen it start. `from_start`
+    says whether we did: true when this machine was seen idle or asleep in the
+    three minutes before the cycle first showed up. State survives restarts.
     """
     key = profile_key(ip)
     now = time.time()
+    running, remaining = dec.get("running"), dec.get("remaining_seconds")
+    code = flat.get("PrCode")
     with _cycle_lock:
         cycles = _load_cycles()
         _last_poll[key] = now
@@ -307,51 +356,90 @@ def track_cycle(ip, running, remaining, code):
         if not running or remaining is None:
             _quiet[key] = now
             if cur is not None:
-                cycles.pop(key)
-                _save_cycles(cycles)
+                _finish(key, cycles.pop(key), now)
+                _write_json(CYCLES, cycles)
             return None
         fresh = (cur is None or str(cur.get("code")) != str(code)
                  or now - cur.get("seen", 0) > 3 * 3600
                  or remaining > cur["total"] + 600)
         if fresh:
-            cur = {"code": code, "total": remaining, "started": now,
-                   "from_start": now - _quiet.get(key, 0) <= 180, "seen": now}
+            if cur is not None:
+                _finish(key, cur, now)
+            cur = {"code": code, "pos": _num(flat.get("Pr")), "total": remaining,
+                   "started": now, "from_start": now - _quiet.get(key, 0) <= 180,
+                   "temp": dec.get("temperature_c"), "spin": dec.get("spin_rpm"),
+                   "soil": _num(flat.get("SLevel")), "fill": dec.get("fill_percent")}
             cycles[key] = cur
-            _save_cycles(cycles)
-        else:
-            cur["seen"] = now
-            if remaining > cur["total"]:
-                cur["total"] = remaining
-                _save_cycles(cycles)
+        if cur.get("pos") is None:
+            cur["pos"] = _num(flat.get("Pr"))
+        cur["seen"], cur["left"] = now, remaining
+        cur["total"] = max(cur["total"], remaining)
+        # the load sensor settles during the first minutes; keep the peak
+        if dec.get("fill_percent") is not None:
+            cur["fill"] = max(cur.get("fill") or 0, dec["fill_percent"])
+        _write_json(CYCLES, cycles)
         return {"total_seconds": cur["total"], "from_start": cur["from_start"],
                 "started": cur["started"]}
 
 
-def _save_cycles(cycles):
-    try:
-        with open(CYCLES, "w", encoding="utf-8") as fh:
-            json.dump(cycles, fh, indent=1)
-    except OSError:
-        pass
+def _went_quiet(ip):
+    """The appliance didn't answer. Close out a cycle that must have ended."""
+    key = profile_key(ip)
+    now = time.time()
+    with _cycle_lock:
+        _quiet[key] = _last_poll[key] = now
+        cycles = _load_cycles()
+        cur = cycles.get(key)
+        if cur and now > cur.get("seen", now) + (cur.get("left") or 0) + 600:
+            _finish(key, cycles.pop(key), now)
+            _write_json(CYCLES, cycles)
+
+
+def snapshot_counters(ip, stats):
+    """Keep the lifetime counters over time, at most one snapshot per 6 hours."""
+    flat = cp.flatten_status(stats)
+    progs = {k[7:]: _num(v) for k, v in flat.items()
+             if k.startswith("Program") and k[7:].isdigit()}
+    if not any(progs.values()):
+        return  # an all-zero reply means the prepare step didn't take
+    key = profile_key(ip)
+    with _cycle_lock:
+        h = read_history()
+        last = next((s for s in reversed(h["snapshots"]) if s.get("ip") == key), None)
+        if last and time.time() - last["t"] < SNAPSHOT_EVERY and last["programs"] == progs:
+            return
+        h["snapshots"] = (h["snapshots"] + [{
+            "ip": key, "t": round(time.time()), "programs": progs,
+            "temps": {k: _num(flat.get(k)) for k in ("Temp0to30", "Temp40", "Temp60to90")},
+        }])[-SNAPSHOT_MAX:]
+        _write_json(HISTORY, h)
 
 
 def watch_default():
-    """Check the default appliance once a minute so a cycle's start is seen
-    even when no page is open. Skipped while a page is already polling."""
+    """Check the default appliance once a minute so a cycle's start (and end)
+    is seen even when no page is open, and snapshot its counters every 6 hours.
+    The minute check is skipped while a page is already polling."""
+    last_snap = 0
     while True:
         time.sleep(WATCH_EVERY)
         ip = default_ip()
-        if not ip or time.time() - _last_poll.get(profile_key(ip), 0) < WATCH_EVERY - 15:
+        if not ip:
             continue
-        try:
-            data, _ = cp.read_status(ip)
-            dec = cp.decode_status(cp.flatten_status(data))
-            track_cycle(ip, dec.get("running"), dec.get("remaining_seconds"),
-                        cp.flatten_status(data).get("PrCode"))
-        except Exception:
-            # asleep or unreachable: an idle machine, as far as cycle starts go
-            with _cycle_lock:
-                _quiet[profile_key(ip)] = _last_poll[profile_key(ip)] = time.time()
+        if time.time() - _last_poll.get(profile_key(ip), 0) >= WATCH_EVERY - 15:
+            try:
+                data, _ = cp.read_status(ip)
+                flat = cp.flatten_status(data)
+                track_cycle(ip, flat, cp.decode_status(flat))
+            except Exception:
+                _went_quiet(ip)
+                continue
+        if time.time() - last_snap >= SNAPSHOT_EVERY:
+            try:
+                stats, _ = cp.read_statistics(ip)
+                snapshot_counters(ip, stats)
+                last_snap = time.time()
+            except Exception:
+                pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -388,6 +476,9 @@ class Handler(BaseHTTPRequestHandler):
             if route in ("/", "/cycles", "/cycles.html"):
                 return self._file("cycles.html", "text/html; charset=utf-8")
 
+            if route in ("/stats", "/stats.html"):
+                return self._file("stats.html", "text/html; charset=utf-8")
+
             if route in ("/advanced", "/index.html"):
                 return self._file("index.html", "text/html; charset=utf-8")
 
@@ -416,9 +507,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {
                     "status": data,
                     "decoded": decoded,
-                    "cycle": track_cycle(ip, decoded.get("running"),
-                                         decoded.get("remaining_seconds"),
-                                         flat.get("PrCode")),
+                    "cycle": track_cycle(ip, flat, decoded),
                     "type": info.get("type") or "unknown",
                     "encrypted": info["encrypted"],
                     "recovered_key": info.get("recovered_key") or "",
@@ -439,9 +528,21 @@ class Handler(BaseHTTPRequestHandler):
                 if not ip:
                     return self._send(400, {"error": "ip required"})
                 data, info = cp.read_statistics(ip, q.get("key", ""))
+                snapshot_counters(ip, data)
                 return self._send(200, {"statistics": data,
                                         "slots": cp.program_slots(data),
                                         "url": info.get("url")})
+
+            if route == "/api/history":
+                ip = q.get("ip") or default_ip()
+                key = profile_key(ip) if ip else None
+                h = read_history()
+                mine = lambda rows: [r for r in rows if not key or r.get("ip") == key]
+                with _cycle_lock:
+                    running = _load_cycles().get(key) if key else None
+                return self._send(200, {"cycles": mine(h["cycles"]),
+                                        "snapshots": mine(h["snapshots"]),
+                                        "running": running})
 
             if route == "/api/appliances":
                 db = load_programs() or {"models": []}
