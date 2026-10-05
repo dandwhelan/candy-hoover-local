@@ -140,6 +140,10 @@
        font-weight:650;cursor:pointer;background:var(--accent);color:#fff;flex:none}
   .btn:disabled{opacity:.4;cursor:not-allowed}
   .btn.ghost{background:var(--chip);color:var(--ink);padding:13px 18px}
+  .btn.stop{background:var(--bad);padding:10px 20px;font-size:14px}
+  .stoprow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px}
+  .stoprow[hidden]{display:none}
+  .stoprow .why{color:var(--muted);font-size:13px}
 
   .msg{margin-top:16px;padding:12px 14px;border-radius:10px;font-size:13.5px;
        background:var(--panel);border:1px solid var(--line)}
@@ -185,6 +189,11 @@
       <div class="tphase" id="tPhase"></div>
       <div class="tdone" id="tDone"></div>
     </div>
+  </div>
+
+  <div class="stoprow" id="stopRow" hidden>
+    <button class="btn stop" id="stopBtn">Stop wash</button>
+    <span class="why" id="stopWhy"></span>
   </div>
 
   <div class="leadrow">
@@ -275,7 +284,8 @@ const OPTION_SUGGESTIONS = ["Prewash", "Aquaplus", "Anticrease", "Extra dose",
 const optName = bit => (profile.options && profile.options[bit]) || "Option " + bit;
 // Your machine may not be in the program database, so its codes can carry another
 // model's names. A name you give a program code wins everywhere.
-const nameOf = p => (p && profile.names && profile.names[p.code]) || (p && p.label);
+// your own dial's names win; otherwise a cycle you renamed, then the database's
+const nameOf = p => p && (p.fromDial ? p.label : (profile.names && profile.names[p.code]) || p.label);
 const allowedBits = p => {
   const o = p.opts;
   if(!o) return [];
@@ -353,11 +363,15 @@ function myDial(){
   return Object.keys(d)
     .filter(pos => d[pos].own && !d[pos].remote && (!size || +pos <= size))
     .sort((a, b) => a - b)
-    .map(pos => {
+    .flatMap(pos => {
       const e = d[pos];
       const db = e.code != null && DB ? DB.programs.find(p => String(p.code) === String(e.code) && !isOff(p)) : null;
-      return Object.assign({}, db || {}, {serial: "dial-" + pos, sel: +pos, label: e.label,
-                           code: e.code ?? null, fromDial: true, known: !!db});
+      const c = Object.assign({}, db || {}, {serial: "dial-" + pos, sel: +pos, label: e.label,
+                              code: e.code ?? null, fromDial: true, known: !!db});
+      // "textTest": true on a position adds a copy that sends your own text as
+      // PrStr, the program name some machines show on their display
+      return e.textTest ? [c, Object.assign({}, c, {serial: "text-" + pos,
+                           label: e.label + " (custom text)", customText: true})] : [c];
     });
 }
 const cycleList = () => { const mine = myDial(); return mine.length ? mine : programsOf(model); };
@@ -412,7 +426,8 @@ function renderGrid(){
     if(p.temp !== undefined) bits.push(p.temp === 0 ? "Cold" : p.temp + "°C");
     if(p.spin) bits.push(p.spin + " rpm");
     if(p.duration) bits.push(p.duration + " min");
-    const isLive = p.fromDial ? String(p.sel) === String(live.Pr)
+    const isLive = p.customText ? false
+                 : p.fromDial ? String(p.sel) === String(live.Pr)
                               : String(p.code) === String(live.PrCode);
     return '<button class="cyc" data-s="' + p.serial + '" aria-pressed="' +
       (chosen && chosen.serial === p.serial) + '">' +
@@ -458,9 +473,14 @@ function renderSheet(){
     '<div class="sheet"><header><span class="ico">' + iconFor(nameOf(p)) + "</span>" +
       "<div><h2>" + esc(nameOf(p)) + "</h2><div class='sub'>dial position " +
       (p.sel ?? "?") + (p.duration ? " · about " + p.duration + " min" : "") +
-      ' · <button class="chip" id="progName" style="padding:2px 9px;font-size:12px;' +
-      'min-width:0">Rename</button>' +
+      (p.customText ? "" : ' · <button class="chip" id="progName" style="padding:2px 9px;font-size:12px;' +
+      'min-width:0">Rename</button>') +
       "</div></div></header><div class='opts'>" +
+      (p.customText ? '<div class="opt"><div class="t">Display text</div>' +
+        '<input id="dispText" maxlength="32" placeholder="' + esc(p.label.replace(/ \(custom text\)$/, "")) +
+        '" value="' + esc(sel.text || "") + '" style="font:inherit;padding:8px 10px;border-radius:10px;' +
+        'border:1.5px solid var(--line);background:var(--bg);color:var(--ink);width:100%;max-width:280px">' +
+        '<div class="fixed" style="margin-top:6px">Sent as the program name. Shows on the machine only if its display can show text.</div></div>' : "") +
       '<div class="opt"><div class="t">Temperature</div>' +
         chips("temp", dflt.concat(TEMPS.filter(t => t <= tmax)), sel.temp,
               v => v === DEFAULT ? "Machine default" : v === 0 ? "Cold" : v + "°") + "</div>" +
@@ -474,6 +494,8 @@ function renderSheet(){
       '<div class="opt"><div class="t">Extras</div>' + optionBlock(p) + "</div>" +
     "</div></div>";
 
+  const dispText = $("dispText");
+  if(dispText) dispText.oninput = () => { sel.text = dispText.value; renderBar(); };
   $("sheet").querySelectorAll(".chip[data-k]").forEach(c => {
     c.onclick = () => { sel[c.dataset.k] = +c.dataset.v; renderSheet(); renderBar(); };
   });
@@ -536,7 +558,8 @@ function build(){
   const p = chosen;
   const q = ["Write=1", "StSt=1"];
   if(sel.delay > 0) q.push("DelVl=" + Math.round(sel.delay / 30));   // 30-minute steps
-  q.push("PrNm=" + (p.sel ?? 0), "PrCode=" + p.code, "PrStr=" + encodeURIComponent(nameOf(p)));
+  const text = p.customText ? sel.text.trim() || p.label.replace(/ \(custom text\)$/, "") : nameOf(p);
+  q.push("PrNm=" + (p.sel ?? 0), "PrCode=" + p.code, "PrStr=" + encodeURIComponent(text));
   if(sel.temp !== null && sel.temp !== DEFAULT) q.push("TmpTgt=" + sel.temp);
   if(sel.soil !== null && (p.soilMax ?? 0) > 0) q.push("SLevTgt=" + sel.soil);
   if(sel.spin !== null && sel.spin !== DEFAULT) q.push("SpdTgt=" + Math.round(sel.spin / 100));
@@ -564,7 +587,7 @@ function choose(p){
     temp: p.fromDial ? DEFAULT : p.temp !== undefined ? p.temp : 40,
     spin: p.fromDial ? DEFAULT : p.spin !== undefined ? p.spin : 1000,
     soil: (p.soilMax ?? 0) > 0 ? (p.soil ?? p.soilMax) : null,
-    steam: 0, delay: 0,
+    steam: 0, delay: 0, text: "",
     opts: allowedBits(p).reduce(
       (m, b) => m | (String(live_opt(b)) === "1" ? 1 << (b - 1) : 0), 0),
   };
@@ -620,8 +643,39 @@ async function refresh(){
   }
   renderState();
   renderTimer();
+  renderStop();
   if(model) renderGrid();
 }
+
+// Running, paused, or waiting on a delayed start: all can be cancelled.
+const ACTIVE = ["2", "3", "4", "5"];
+function renderStop(){
+  const active = ACTIVE.includes(String(live.MachMd));
+  $("stopRow").hidden = !active;
+  if(!active) return;
+  const remote = String(live.WiFiStatus) === "1";
+  $("stopBtn").disabled = !remote;
+  $("stopWhy").textContent = remote ? ""
+    : "Remote control is off on the machine, so it won't take a stop from here.";
+}
+
+// What the Home Assistant integration sends: StSt=0 on the running position.
+$("stopBtn").onclick = async () => {
+  const name = liveName() || "the current cycle";
+  if(!confirm("Stop " + name + "?\n\nThe machine may still need to drain before " +
+              "the door unlocks. Run Drain + Spin if water is left in the drum.")) return;
+  const cmd = "Write=1&StSt=0&PrNm=" + (live.Pr ?? 0) + "&DelVl=0";
+  $("stopBtn").disabled = true;
+  try{
+    const j = await api("/api/command", {ip: IP, params: cmd});
+    $("msg").innerHTML = '<div class="msg good">Stop sent. Machine replied: ' +
+      esc(j.response || "(nothing)") + "</div>";
+    setTimeout(refresh, 2000);
+  }catch(e){
+    $("msg").innerHTML = '<div class="msg bad">' + esc(e.message) + "</div>";
+    $("stopBtn").disabled = false;
+  }
+};
 
 let savedIp = "";
 

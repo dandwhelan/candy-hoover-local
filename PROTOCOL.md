@@ -121,7 +121,7 @@ Write=1&StSt=1
         &Stm=<0|1>                  steam
         [&RecipeId=…] [&StartCheckUp=…]
 
-stop      Write=1&StSt=0&DelMd=0&PrNm=<dial position>
+stop      Write=1&StSt=0&PrNm=<running position>&DelVl=0    (tested on a running cycle; should also cancel a delayed start)
 reset     Write=1&StSt=0&PrNm=2
 check-up  Write=1&CheckUpState=1
 ```

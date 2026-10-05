@@ -123,6 +123,14 @@ Which bit is which option varies by model and isn't in the database. Set an opti
 the machine's own panel, then press **Name a button** in the cycle picker: it shows which
 `OptN` is on and lets you label it.
 
+### Custom display text (experimental)
+
+The start command carries the program's name as `PrStr`, and machines with a text display
+may show it. To try your own text, add `"textTest": true` to a dial position in
+`profiles.json`. The picker then shows a "(custom text)" copy of that cycle with a
+**Display text** box; leave it empty to send the normal name. Machines with digit-only
+displays ignore it.
+
 ### Machines that change IP address
 
 If your router hands the appliance a different address now and then, point the second
