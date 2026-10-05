@@ -104,9 +104,11 @@ closest *program set*, not identified exactly. Two things put that right:
 - **Name your dial** (Stats → **Identify a position**, or **Learn my dial** in the
   advanced view). Turn the knob and type the name printed at each position. Once your
   dial has names, the cycle picker offers only those cycles and sends *your* position
-  numbers, since another model's positions can start a different program on your
-  machine. Cycles whose program code isn't known yet run on the machine's own
-  temperature and spin ("Machine default").
+  numbers along with each position's program code. The code is what actually picks the
+  program; without it the machine runs whatever it was last set to. The server fills
+  codes in from the machine's status, so a newly named position just needs the dial
+  turned to it once while the app is watching. Cycles not in the program database run on
+  the machine's own temperature and spin ("Machine default").
 
 Positions past the end of the physical dial belong to cycles started from an app. Set
 the dial size (`dial_size` on `/api/profile/save`) and the Stats page colours those
@@ -114,7 +116,7 @@ separately.
 
 ### Options (Prewash, Zoom, extra rinse, …)
 
-Options ride on a 9-bit mask (`Opt1`–`Opt9`, sent as `&OptMsk=<int>`). Each program
+Options ride on a 9-bit mask (`Opt1`–`Opt9`, sent as `&OptMsk1=<int>`). Each program
 declares which bits it accepts, so the picker only offers the ones that cycle supports.
 
 Which bit is which option varies by model and isn't in the database. Set an option on

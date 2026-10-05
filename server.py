@@ -338,6 +338,23 @@ def _finish(key, cur, now):
     _write_json(HISTORY, h)
 
 
+def learn_dial_code(ip, flat):
+    """
+    Fill in the program code of a named dial position from what the machine
+    reports. Pr and PrCode always describe the same program (the knob's when
+    idle, the running one otherwise), and a start command without the right
+    PrCode runs the wrong cycle, so every named position needs one.
+    """
+    pos, code = flat.get("Pr"), flat.get("PrCode")
+    if pos in (None, "", "0") or code in (None, "", "0"):
+        return
+    profiles = read_profiles()
+    prof = profiles.get(profile_key(ip, profiles)) or {}
+    entry = (prof.get("dial") or {}).get(str(pos))
+    if entry and str(entry.get("code") or "") != str(code):
+        write_profile(ip, {"dial": {str(pos): dict(entry, code=str(code))}})
+
+
 def track_cycle(ip, flat, dec):
     """
     Remember each cycle's full length, and log it once it finishes.
@@ -347,6 +364,10 @@ def track_cycle(ip, flat, dec):
     says whether we did: true when this machine was seen idle or asleep in the
     three minutes before the cycle first showed up. State survives restarts.
     """
+    try:
+        learn_dial_code(ip, flat)
+    except (OSError, ValueError):
+        pass
     key = profile_key(ip)
     now = time.time()
     running, remaining = dec.get("running"), dec.get("remaining_seconds")

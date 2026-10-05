@@ -407,7 +407,8 @@ function renderGrid(){
   $("modelPick").hidden = !!mine;
   $("grid").innerHTML = list.map(p => {
     const bits = [];
-    if(p.fromDial && !p.known) bits.push("machine's settings");
+    if(p.fromDial && p.code == null) bits.push("turn the dial here once");
+    else if(p.fromDial && !p.known) bits.push("machine's settings");
     if(p.temp !== undefined) bits.push(p.temp === 0 ? "Cold" : p.temp + "°C");
     if(p.spin) bits.push(p.spin + " rpm");
     if(p.duration) bits.push(p.duration + " min");
@@ -528,20 +529,19 @@ function optionBlock(p){
     'font-size:12px;min-width:0">Name a button</button></div>';
 }
 
+// The shape the official app sends (seen in packet captures). The machine
+// picks the program by PrCode: PrNm alone is ignored and it runs whatever it
+// was last set to, which is how "Whites" once started Drain + Spin.
 function build(){
   const p = chosen;
-  let s = "Write=1&Pa=0&Sel=0&PrNm=" + (p.sel ?? 0);
-  if(sel.delay > 0) s += "&DelMd=1&DelVl=" + sel.delay;
-  s += "&StSt=1";
-  if(sel.temp !== null && sel.temp !== DEFAULT) s += "&TmpTgt=" + sel.temp + "&TmpDf=" + sel.temp;
-  if(sel.soil !== null && (p.soilMax ?? 0) > 0) s += "&SLevTgt=" + sel.soil;
-  if(sel.spin !== null && sel.spin !== DEFAULT){
-    const w = Math.round(sel.spin / 100);
-    s += "&SpdTgt=" + w + "&SpdDef=" + w;
-  }
-  s += "&Stm=" + (sel.steam || 0);
-  if(sel.opts > 0) s += "&OptMsk=" + sel.opts;      // 9-bit mask, bit0 = Opt1
-  return s;
+  const q = ["Write=1", "StSt=1"];
+  if(sel.delay > 0) q.push("DelVl=" + Math.round(sel.delay / 30));   // 30-minute steps
+  q.push("PrNm=" + (p.sel ?? 0), "PrCode=" + p.code, "PrStr=" + encodeURIComponent(nameOf(p)));
+  if(sel.temp !== null && sel.temp !== DEFAULT) q.push("TmpTgt=" + sel.temp);
+  if(sel.soil !== null && (p.soilMax ?? 0) > 0) q.push("SLevTgt=" + sel.soil);
+  if(sel.spin !== null && sel.spin !== DEFAULT) q.push("SpdTgt=" + Math.round(sel.spin / 100));
+  q.push("OptMsk1=" + (sel.opts || 0), "OptMsk2=0", "Stm=" + (sel.steam || 0));
+  return q.join("&");
 }
 
 function renderBar(){
@@ -576,6 +576,18 @@ function choose(p){
 $("cancel").onclick = () => { chosen = null; renderGrid(); renderSheet(); };
 
 $("start").onclick = async () => {
+  if(chosen.code == null){
+    // the server learns codes from the status; pick up one learned since load
+    try{ profile = await api("/api/profile", {ip: IP}); }catch(e){}
+    chosen = cycleList().find(x => String(x.serial) === String(chosen.serial)) || chosen;
+    renderGrid(); renderSheet();
+  }
+  if(chosen.code == null){
+    $("msg").innerHTML = '<div class="msg bad">The machine hasn\u2019t told us which program is on position ' +
+      esc(chosen.sel) + " yet, and without it the wrong cycle runs. Turn the dial to " + esc(chosen.label) +
+      " for a few seconds with this page open, then try again.</div>";
+    return;
+  }
   const cmd = build();
   if(!confirm("Start the machine?\n\n" + chosen.label + "\n\n" + cmd)) return;
   $("start").disabled = true;

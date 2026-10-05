@@ -109,26 +109,35 @@ an independent read-only implementation of the same API.
 **Washer**
 
 ```
-Write=1&Pa=0&Sel=0&PrNm=<dial position>
-        [&DelMd=1&DelVl=<min>]      delayed start
-        [&StSt=1]                   start
-        [&TmpTgt=<°C>&TmpDf=<°C>]   temperature
+Write=1&StSt=1
+        [&DelVl=<n>]                delayed start, in 30-minute steps
+        &PrNm=<dial position>
+        &PrCode=<program code>      this is what picks the program
+        &PrStr=<program name>
+        [&TmpTgt=<°C>]              temperature
         [&SLevTgt=<n>]              soil level
-        [&SpdTgt=<rpm/100>&SpdDef=<rpm/100>]
-        [&Stm=<0|1>]                steam
-        [&OptMsk=<int>]             options, see below
-        [&RecipeId=…] [&CheckUpState=…]
+        [&SpdTgt=<rpm/100>]         spin
+        &OptMsk1=<int>&OptMsk2=<int>  options, see below
+        &Stm=<0|1>                  steam
+        [&RecipeId=…] [&StartCheckUp=…]
 
 stop      Write=1&StSt=0&DelMd=0&PrNm=<dial position>
 reset     Write=1&StSt=0&PrNm=2
 check-up  Write=1&CheckUpState=1
 ```
 
-- **`Sel` is always the literal `0`.** It's **`PrNm`** that carries the dial position.
+This is the start command the official app sends, as seen in packet captures by
+[bigmoby/home-assistant-candy](https://github.com/bigmoby/home-assistant-candy).
+
+- **Send `PrCode`.** Tested on a real washer: `PrNm=1` with no `PrCode` was accepted
+  (`SUCCESS`) but the machine ran Drain + Spin, which it had last been set to. Learn each
+  position's code from the status (`Pr` and `PrCode` always describe the same program).
 - **Spin goes out as rpm ÷ 100**, the same as it's reported: 1400 rpm is sent as `14`.
   Temperature is plain °C.
 - **`255` means "not applicable"** for temperature and spin in the program database
   (rinse and drain programs use it).
+- An earlier version of this file had `Pa=0&Sel=0`, `TmpDf`, `SpdDef`, `DelMd=1` and a
+  delay in minutes on the start command. The official app sends none of those.
 
 **Dishwasher**: `OpzProg`, `OptMsk1`, `OptMsk2`, `OpenDoorOpt=7`, `Reset=1`, `DelayStart`.
 
@@ -147,7 +156,7 @@ mask = int(Opt9 Opt8 Opt7 Opt6 Opt5 Opt4 Opt3 Opt2 Opt1, base 2)
 ```
 
 So **bit 0 (value 1) is `Opt1` … bit 8 (value 256) is `Opt9`**, and it's sent back as
-`&OptMsk=<int>`. Some machines have a second mask, `OptMsk2`.
+`&OptMsk1=<int>`, with `&OptMsk2=<int>` for the second mask (`0` on most machines).
 
 Which options a cycle accepts is its `available_options` value in the program database,
 using the same bit layout. On AWMPD610LH8B-80, for example:

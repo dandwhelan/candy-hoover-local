@@ -441,19 +441,18 @@ function renderControls(type, f){
   const build = () => {
     const p = progById(+$("wProg").value) || {};
     const sel = p.sel ?? 0;
-    // Sel is literally 0 in the app; PrNm carries the dial position.
-    let s = "Write=1&Pa=0&Sel=0&PrNm=" + sel;
+    // The official app's shape (packet captures): PrCode picks the program;
+    // PrNm alone is ignored and the machine runs whatever it was last set to.
+    let s = "Write=1&StSt=1";
     const d = parseInt($("wDelay").value, 10);
-    if(d > 0) s += "&DelMd=1&DelVl=" + d;
-    s += "&StSt=1";
+    if(d > 0) s += "&DelVl=" + Math.round(d / 30);                    // 30-minute steps
+    s += "&PrNm=" + sel + "&PrCode=" + p.code + "&PrStr=" + encodeURIComponent(p.label || "");
     const t = $("wTemp").value;
-    if(t !== "") s += "&TmpTgt=" + t + "&TmpDf=" + t;
+    if(t !== "") s += "&TmpTgt=" + t;
     if($("wSoil").value !== "") s += "&SLevTgt=" + $("wSoil").value;   // omitted when fixed
     const rpm = parseInt($("wSpin").value, 10);
-    if(!isNaN(rpm)){
-      const w = Math.round(rpm / 100);
-      s += "&SpdTgt=" + w + "&SpdDef=" + w;
-    }
+    if(!isNaN(rpm)) s += "&SpdTgt=" + Math.round(rpm / 100);
+    s += "&OptMsk1=0&OptMsk2=0";
     s += "&Stm=" + ($("wSteam").value || 0);
     return s;
   };
