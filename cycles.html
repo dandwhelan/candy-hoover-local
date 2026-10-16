@@ -1,218 +1,336 @@
 <!doctype html>
+<html lang="en">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wash — pick a cycle</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Wash · pick a cycle</title>
 <style>
+  /* Hybrid A: minimalist skin on a brutalist frame. Bone paper, hairlines,
+     serif headings, sans body; the structure comes from the telemetry panel:
+     an oversized countdown with a segmented bar, telemetry cells, numbered
+     sections and dial-led tiles. One red, spent only on selection, progress
+     and Stop. Numbers and commands are monospace. */
   :root{
-    --bg:#f4f5f7; --panel:#fff; --ink:#14171c; --muted:#6b7280; --line:#e4e7ec;
-    --accent:#c8102e; --accent-soft:#fdecef; --ok:#1c7c4a; --ok-soft:#e7f5ed;
-    --warn:#9a6700; --bad:#b3261e; --chip:#f0f2f5;
-    --shadow:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
-    --shadow-lg:0 4px 12px rgba(16,24,40,.08), 0 12px 28px rgba(16,24,40,.08);
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  }
-  @media (prefers-color-scheme:dark){
-    :root{ --bg:#0d0f13; --panel:#161a21; --ink:#e9ecf1; --muted:#98a2b3;
-           --line:#252a33; --accent:#ff5a72; --accent-soft:#2a151b;
-           --ok:#5fd39b; --ok-soft:#12231b; --chip:#1e232b;
-           --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 12px 28px rgba(0,0,0,.5); }
+    --canvas:#F7F6F3; --paper:#FFFFFF; --sunk:#F1F0EC; --line:#EAEAEA; --line-2:#DEDCD6;
+    --ink:#2F3437; --ink-strong:#111111; --muted:#6B6A66;
+    --red:#C8102E;          /* 5.4:1 on canvas, 5.9:1 white on it */
+    --red-soft:#FBEDEF;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",
+           "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+    --serif:"Iowan Old Style","Charter","Palatino Linotype","Book Antiqua",Palatino,
+            Georgia,"Times New Roman",serif;
+    --mono:"SF Mono",ui-monospace,Menlo,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --ease:cubic-bezier(.16,1,.3,1);
+    --r:10px;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-       -webkit-font-smoothing:antialiased}
-  .wrap{max-width:1000px;margin:0 auto;padding:24px 20px 120px}
+  [hidden]{display:none !important}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--canvas);color:var(--ink);
+       font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:56px 32px 176px}
   a{color:inherit}
+  :focus-visible{outline:2px solid var(--ink-strong);outline-offset:2px;border-radius:4px}
+  button{font:inherit;color:inherit}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
-  /* ---------------------------------------------------------- top bar */
-  .top{display:flex;align-items:center;justify-content:space-between;
-       gap:16px;flex-wrap:wrap;margin-bottom:20px}
-  h1{font-size:22px;margin:0;font-weight:680;letter-spacing:-.02em}
-  .topbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .link{font-size:13px;color:var(--muted);text-decoration:none;font-family:inherit;
-        border:1px solid var(--line);padding:7px 12px;border-radius:8px;
-        background:var(--panel);cursor:pointer}
-  .link:hover{border-color:var(--muted)}
-  #ipPick{font:13px var(--mono);color:var(--ink);background:var(--panel);
-          border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:auto}
+  /* section index: "01 / Status" */
+  .idx{display:flex;align-items:baseline;gap:8px;margin:0 0 14px;
+       font:500 12px/1.2 var(--mono);color:var(--muted);letter-spacing:.02em}
+  .idx b{font-weight:500;color:var(--ink-strong)}
+  .idx::after{content:"";flex:1;align-self:center;height:1px;background:var(--line)}
+
+  /* ---------------------------------------------------------- masthead */
+  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px 32px;
+       flex-wrap:wrap;padding-bottom:28px;margin-bottom:48px;border-bottom:1px solid var(--line)}
+  .brand{font:500 12px/1.2 var(--mono);color:var(--muted);margin:0 0 10px}
+  h1{font-family:var(--serif);font-weight:400;font-size:48px;line-height:1.1;
+     letter-spacing:-.03em;margin:0;color:var(--ink-strong)}
+  .topbar{display:flex;gap:8px 18px;align-items:center;flex-wrap:wrap}
+  .appl{display:flex;gap:6px;align-items:center}
+  .navlinks{display:flex;gap:18px;align-items:center}
+  .navlinks a{font-size:14px;color:var(--ink);text-decoration:none;
+              border-bottom:1px solid var(--line-2);padding:2px 0}
+  .navlinks a:hover{border-color:var(--ink)}
+  .link{font-size:13px;color:var(--ink);text-decoration:none;
+        border:1px solid var(--line);padding:7px 12px;border-radius:6px;
+        background:var(--paper);cursor:pointer;transition:border-color .2s,background .2s}
+  .link:hover{border-color:var(--line-2);background:var(--sunk)}
+  .link:active{transform:scale(.98)}
+  #ipPick{font:12.5px var(--mono);color:var(--ink);background:var(--paper);
+          border:1px solid var(--line);border-radius:6px;padding:7px 10px;max-width:240px}
 
   /* ---------------------------------------------------------- status */
-  .state{display:flex;align-items:center;gap:14px;background:var(--panel);
-         border:1px solid var(--line);border-radius:14px;padding:14px 16px;
-         box-shadow:var(--shadow);margin-bottom:22px}
-  .dot{width:10px;height:10px;border-radius:99px;background:var(--ok);flex:none;
-       box-shadow:0 0 0 4px var(--ok-soft)}
-  .dot.busy{background:var(--ok);box-shadow:0 0 0 4px var(--ok-soft);
-            animation:running 1.2s ease-in-out infinite}
-  @keyframes running{
-    0%,100%{opacity:1;box-shadow:0 0 0 4px var(--ok-soft),0 0 10px 1px var(--ok)}
-    50%{opacity:.25;box-shadow:0 0 0 4px var(--ok-soft),0 0 0 0 transparent}}
-  @media (prefers-reduced-motion:reduce){ .dot.busy{animation:none} }
-  .dot.err{background:var(--bad);box-shadow:0 0 0 4px rgba(179,38,30,.15)}
-  @keyframes pulse{50%{opacity:.35}}
-  .state .who{font-weight:620}
-  .state .detail{color:var(--muted);font-size:13.5px}
-  .state .right{margin-left:auto;text-align:right;color:var(--muted);font-size:12.5px}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:12px}
+  .status{margin-bottom:16px}
+  .state{padding:24px 28px 0;overflow:hidden}
+  .state .head{display:flex;align-items:center;gap:10px}
+  .dot{width:8px;height:8px;border-radius:99px;background:var(--muted);flex:none}
+  .dot.busy{background:var(--ink-strong)}
+  .dot.err{background:var(--red)}
+  @keyframes running{50%{opacity:.25}}
+  .state .who{font-family:var(--serif);font-size:24px;line-height:1.2;letter-spacing:-.02em;
+              color:var(--ink-strong)}
+  .state .detail{color:var(--ink);font-size:14.5px;margin:6px 0 24px}
+  /* telemetry cells: temp / rpm / fill / remote, hairline-divided */
+  .right{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1px;
+         background:var(--paper);border-top:1px solid var(--line);margin:0 -28px}
+  .right:empty{display:none}
+  /* hairlines drawn as outlines so an empty trailing slot stays paper, not grey */
+  .right > span{outline:1px solid var(--line);background:var(--paper);padding:14px 28px 16px;display:flex;flex-direction:column;gap:4px}
+  .right small{font:500 11.5px/1.2 var(--mono);color:var(--muted)}
+  .right b{font:400 24px/1.1 var(--mono);color:var(--ink-strong);letter-spacing:-.02em;
+           font-variant-numeric:tabular-nums}
 
-  /* ---------------------------------------------------------- timer */
-  .timer{display:flex;align-items:center;gap:20px;background:var(--panel);
-         border:1px solid var(--line);border-radius:16px;padding:18px 20px;
-         box-shadow:var(--shadow);margin-bottom:22px}
-  .timer[hidden]{display:none}
-  .ring{position:relative;width:108px;height:108px;flex:none}
-  .ring svg{width:108px;height:108px;transform:rotate(-90deg)}
-  .ring circle{fill:none;stroke-width:9;stroke-linecap:round}
-  .ring .track{stroke:var(--chip)}
-  .ring .fill{stroke:var(--accent);stroke-dasharray:326.7;stroke-dashoffset:326.7;
+  /* ---------------------------------------------------------- countdown */
+  .timer{padding:24px 28px 28px;margin-bottom:16px}
+  .readout{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;margin:4px 0 22px}
+  #tBig{font:300 clamp(4.75rem,20vw,9.5rem)/.86 var(--mono);letter-spacing:-.06em;
+        color:var(--ink-strong);font-variant-numeric:tabular-nums}
+  #tUnit{font-family:var(--serif);font-size:22px;color:var(--muted);letter-spacing:-.01em}
+  /* progress: the same ringFill dash offset, drawn as a straight segmented bar */
+  .ring{position:relative;height:14px;background:var(--sunk)}
+  .ring svg{display:block;width:100%;height:100%}
+  .ring .fill{stroke:var(--red);stroke-width:40;stroke-dasharray:326.7;stroke-dashoffset:326.7;
               transition:stroke-dashoffset .9s linear}
-  .ringtext{position:absolute;inset:0;display:flex;flex-direction:column;
-            align-items:center;justify-content:center;gap:1px}
-  .ringtext b{font-size:26px;font-weight:680;letter-spacing:-.03em;line-height:1}
-  .ringtext span{font-size:11px;color:var(--muted)}
-  .tinfo{min-width:0}
-  .tprog{font-size:18px;font-weight:660;letter-spacing:-.01em}
-  .tphase{color:var(--muted);font-size:14px;margin-top:2px}
-  .tdone{color:var(--muted);font-size:13px;margin-top:8px}
-  @media (max-width:520px){
-    .timer{gap:14px;padding:14px}
-    .ring,.ring svg{width:88px;height:88px}
-    .ringtext b{font-size:22px}
-  }
+  .ring::after{content:"";position:absolute;inset:0;pointer-events:none;
+               background:repeating-linear-gradient(90deg,transparent 0 calc(5% - 2px),var(--paper) calc(5% - 2px) 5%)}
+  .scale{display:flex;justify-content:space-between;font:11px/1 var(--mono);color:var(--muted);margin-top:8px}
+  .tinfo{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:4px 32px;
+         margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+  .tprog{font-family:var(--serif);font-size:24px;line-height:1.15;letter-spacing:-.02em;
+         color:var(--ink-strong);grid-row:span 2}
+  .tphase{color:var(--ink);font-size:14px}
+  .tdone{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
 
-  /* ---------------------------------------------------------- grid */
-  .leadrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px}
-  .leadrow select{margin-left:auto;background:var(--panel);color:var(--ink);
-       border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;
-       font-size:12.5px;max-width:100%}
-  .lead{margin:0 !important;font-size:13px;text-transform:uppercase;letter-spacing:.08em;
-        color:var(--muted);font-weight:650;margin:0 0 12px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px}
-  .cyc{background:var(--panel);border:1.5px solid var(--line);border-radius:14px;
-       padding:14px 13px 13px;cursor:pointer;text-align:left;font:inherit;color:inherit;
-       box-shadow:var(--shadow);transition:border-color .12s, transform .12s, box-shadow .12s;
-       position:relative;display:flex;flex-direction:column;gap:9px;min-height:132px}
-  .cyc:hover{border-color:var(--muted);transform:translateY(-2px);box-shadow:var(--shadow-lg)}
-  .cyc[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
-  .cyc .ico{width:38px;height:38px;border-radius:11px;background:var(--chip);
-            display:grid;place-items:center;color:var(--ink);flex:none}
-  .cyc[aria-pressed="true"] .ico{background:var(--accent);color:#fff}
-  .cyc .nm{font-weight:620;font-size:14.5px;line-height:1.3;letter-spacing:-.01em}
-  .cyc .meta{font-size:12.5px;color:var(--muted);margin-top:auto}
-  .cyc .dial{position:absolute;top:12px;right:12px;font:11px/1 var(--mono);
-             color:var(--muted);background:var(--chip);padding:4px 6px;border-radius:6px}
-  .cyc[aria-pressed="true"] .dial{background:var(--panel);color:var(--accent)}
-  .cyc .live{position:absolute;top:12px;right:12px;font-size:10.5px;font-weight:700;
-             letter-spacing:.04em;color:var(--ok);background:var(--ok-soft);
-             padding:4px 7px;border-radius:6px}
-
-  /* ---------------------------------------------------------- options */
-  .sheet{margin-top:24px;background:var(--panel);border:1px solid var(--line);
-         border-radius:16px;box-shadow:var(--shadow-lg);overflow:hidden}
-  .sheet header{display:flex;align-items:center;gap:13px;padding:16px 18px;
-                border-bottom:1px solid var(--line)}
-  .sheet header .ico{width:42px;height:42px;border-radius:12px;background:var(--accent);
-                     color:#fff;display:grid;place-items:center;flex:none}
-  .sheet header h2{margin:0;font-size:17px;font-weight:660;letter-spacing:-.01em}
-  .sheet header .sub{color:var(--muted);font-size:13px}
-  .opts{padding:6px 18px 18px}
-  .opt{padding:14px 0;border-bottom:1px solid var(--line)}
-  .opt:last-child{border-bottom:0}
-  .opt .t{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
-          color:var(--muted);font-weight:650;margin-bottom:9px}
-  .chips{display:flex;gap:8px;flex-wrap:wrap}
-  .chip{border:1.5px solid var(--line);background:var(--bg);color:var(--ink);
-        padding:9px 15px;border-radius:99px;cursor:pointer;font:inherit;font-size:14px;
-        font-weight:560;transition:border-color .12s,background .12s;min-width:52px}
-  .chip:hover{border-color:var(--muted)}
-  .chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
-  .fixed{color:var(--muted);font-size:13.5px;font-style:italic}
-
-  /* ---------------------------------------------------------- action bar */
-  .bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);
-       border-top:1px solid var(--line);box-shadow:0 -4px 20px rgba(16,24,40,.07);
-       padding:13px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;z-index:5}
-  .bar[hidden]{display:none}
-  .bar .info{min-width:0;flex:1}
-  .bar .info .l1{font-weight:620;font-size:14.5px}
-  .bar .info .l2{font:11.5px var(--mono);color:var(--muted);
-                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .btn{border:0;border-radius:11px;padding:13px 26px;font:inherit;font-size:15px;
-       font-weight:650;cursor:pointer;background:var(--accent);color:#fff;flex:none}
-  .btn:disabled{opacity:.4;cursor:not-allowed}
-  .btn.ghost{background:var(--chip);color:var(--ink);padding:13px 18px}
-  .btn.stop{background:var(--bad);padding:10px 20px;font-size:14px}
-  .stoprow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px}
-  .stoprow[hidden]{display:none}
+  .stoprow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 8px}
   .stoprow .why{color:var(--muted);font-size:13px}
 
-  .msg{margin-top:16px;padding:12px 14px;border-radius:10px;font-size:13.5px;
-       background:var(--panel);border:1px solid var(--line)}
-  .msg.good{border-color:var(--ok);color:var(--ok)}
-  .msg.bad{border-color:var(--bad);color:var(--bad)}
-  .empty{color:var(--muted);padding:30px 0;text-align:center}
-  @media (max-width:520px){
-    .grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
-    .bar{padding:11px 14px}
+  /* ---------------------------------------------------------- cycles */
+  .cycles{margin-top:72px}
+  .leadrow{display:flex;align-items:baseline;gap:12px 20px;flex-wrap:wrap;margin:0 0 20px}
+  .lead{margin:0;font-family:var(--serif);font-weight:400;font-size:28px;line-height:1.15;
+        letter-spacing:-.02em;color:var(--ink-strong)}
+  .leadrow select{margin-left:auto;background:var(--paper);color:var(--ink);
+       border:1px solid var(--line);border-radius:6px;padding:7px 10px;font:inherit;
+       font-size:13px;max-width:100%}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1px;
+        background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .cyc{outline:1px solid var(--line);background:var(--paper);border:0;padding:18px 18px 16px;cursor:pointer;text-align:left;
+       position:relative;display:grid;grid-template-columns:1fr auto;
+       grid-template-rows:auto 1fr auto;gap:10px 8px;min-height:164px;
+       transition:background .2s,box-shadow .2s}
+  .cyc:hover{background:var(--canvas)}
+  .cyc:focus-visible{outline:2px solid var(--ink-strong);outline-offset:-4px;border-radius:0}
+  .cyc .dial{grid-column:1;grid-row:1;font:300 46px/.85 var(--mono);letter-spacing:-.05em;
+             color:var(--ink-strong);font-variant-numeric:tabular-nums}
+  .cyc .ico{grid-column:2;grid-row:1;color:var(--muted);align-self:start}
+  .cyc .ico svg{display:block}
+  .cyc .nm{grid-column:1 / -1;grid-row:2;align-self:end;font-weight:600;font-size:15px;
+           line-height:1.3;letter-spacing:-.01em;color:var(--ink-strong)}
+  .cyc .meta{grid-column:1 / -1;grid-row:3;font:12px/1.45 var(--mono);color:var(--muted);
+             border-top:1px solid var(--line);padding-top:8px}
+  .cyc .live{position:absolute;top:18px;right:48px;font:500 11px/1 var(--mono);color:var(--ink-strong);
+             border:1px solid var(--ink-strong);padding:4px 6px;border-radius:4px}
+  .cyc[aria-pressed="true"]{background:var(--paper);box-shadow:inset 0 0 0 2px var(--red)}
+  .cyc[aria-pressed="true"] .dial,.cyc[aria-pressed="true"] .ico{color:var(--red)}
+
+  /* ---------------------------------------------------------- option sheet */
+  .sheet{margin-top:40px;background:var(--paper);border:1px solid var(--line);border-radius:12px}
+  .sheet header{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;
+                padding:28px 32px 24px}
+  .sheet header .idx{grid-column:1 / -1;margin:0}
+  .sheet header .ico{width:52px;height:52px;border-radius:10px;background:var(--canvas);
+                     border:1px solid var(--line);color:var(--ink-strong);display:grid;place-items:center}
+  .sheet header h2{margin:0;font-family:var(--serif);font-weight:400;font-size:32px;line-height:1.1;
+                   letter-spacing:-.03em;color:var(--ink-strong)}
+  .sheet header .sub{color:var(--muted);font:12.5px/1.5 var(--mono);margin-top:8px;
+                     display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .opts{padding:0 32px 12px}
+  .opt{display:grid;grid-template-columns:160px minmax(0,1fr);gap:10px 24px;align-items:start;
+       padding:22px 0;border-top:1px solid var(--line)}
+  .opt .t{font-size:14px;color:var(--ink-strong);font-weight:600;padding-top:8px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line-2);background:var(--paper);color:var(--ink);
+        padding:8px 14px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1.4;
+        font-weight:500;min-width:52px;min-height:40px;font-variant-numeric:tabular-nums;
+        transition:border-color .2s,background .2s,color .2s}
+  .chip:hover{border-color:var(--ink);background:var(--canvas)}
+  .chip:active{transform:scale(.98)}
+  .chip[aria-pressed="true"]{border-color:var(--red);color:var(--red);font-weight:600;
+                             box-shadow:inset 0 0 0 1px var(--red);background:var(--paper)}
+  .chip.mini{min-width:0;min-height:0;padding:3px 10px;font:12px/1.5 var(--sans);border-radius:4px}
+  .fixed{color:var(--muted);font-size:14px;padding-top:8px}
+  .note{color:var(--muted);font-size:13px;margin-top:12px;display:flex;align-items:center;
+        gap:10px;flex-wrap:wrap}
+  .field{font:inherit;padding:9px 12px;border-radius:6px;border:1px solid var(--line-2);
+         background:var(--paper);color:var(--ink);width:100%;max-width:320px}
+  .field + .fixed{margin-top:6px}
+
+  /* ---------------------------------------------------------- action bar */
+  .bar{position:fixed;left:0;right:0;bottom:0;z-index:5;background:rgba(255,255,255,.94);
+       -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+       border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  .bar .wrap{padding:16px 32px;display:flex;align-items:center;gap:12px 16px}
+  .bar .info{min-width:0;flex:1}
+  .bar .info .l1{font-weight:600;font-size:14.5px;color:var(--ink-strong);
+                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar .info .l2{margin-top:4px;font:11.5px/1.5 var(--mono);color:var(--muted);
+                 background:var(--canvas);border:1px solid var(--line);border-radius:4px;
+                 padding:3px 7px;display:block;
+                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar .info .l2::before{content:"$ ";color:var(--ink-strong)}
+  .btns{display:flex;gap:8px;flex:none}
+  .btn{border:1px solid var(--ink-strong);border-radius:6px;padding:12px 24px;font-size:15px;
+       font-weight:600;cursor:pointer;background:var(--ink-strong);color:#fff;flex:none;
+       transition:background .2s,transform .1s}
+  .btn:hover{background:#333}
+  .btn:active{transform:scale(.98)}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn.ghost{background:var(--paper);color:var(--ink);border-color:var(--line-2)}
+  .btn.ghost:hover{background:var(--canvas)}
+  .btn.stop{background:var(--red);border-color:var(--red);color:#fff;padding:10px 20px;font-size:14px}
+  .btn.stop:hover{background:#A50D26}
+
+  .msg{margin-top:20px;padding:14px 16px;border-radius:8px;font-size:14px;
+       background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--ink-strong)}
+  .msg.bad{border-left-color:var(--red);color:var(--red)}
+  .empty{grid-column:1 / -1;color:var(--muted);padding:48px 24px;text-align:center;background:var(--paper)}
+  .empty b{color:var(--ink)}
+
+  /* ---------------------------------------------------------- motion */
+  @media (prefers-reduced-motion:no-preference){
+    .dot.busy{animation:running 1.6s ease-in-out infinite}
+    .rise{animation:rise .6s var(--ease) both;animation-delay:calc(var(--i,0) * 80ms)}
+    @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important}
+  }
+
+  /* ---------------------------------------------------------- responsive */
+  @media (max-width:720px){
+    .tinfo{grid-template-columns:1fr}
+    .tprog{grid-row:auto;margin-bottom:6px}
+  }
+  @media (max-width:600px){
+    .wrap{padding:28px 16px 210px}
+    .top{padding-bottom:22px;margin-bottom:28px;align-items:flex-start}
+    h1{font-size:36px}
+    .topbar{width:100%;gap:10px 16px}
+    .appl{width:100%}
+    #ipPick{flex:1;max-width:none;min-width:0;padding:9px 10px}
+    .link{padding:9px 12px}
+    .state{padding:20px 20px 0}
+    .state .who{font-size:21px}
+    .right{margin:0 -20px;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .right > span{padding:12px 20px 14px}
+    .right b{font-size:20px}
+    .timer{padding:20px}
+    #tUnit{font-size:18px}
+    .tprog{font-size:21px}
+    .cycles{margin-top:48px}
+    .lead{font-size:24px}
+    .leadrow select{margin-left:0;width:100%}
+    .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .cyc{padding:14px 12px 12px;min-height:150px}
+    .cyc .dial{font-size:38px}
+    .cyc .live{top:14px;right:40px}
+    .sheet{margin-top:28px}
+    .sheet header{padding:20px 18px 18px;gap:14px}
+    .sheet header .ico{width:44px;height:44px}
+    .sheet header h2{font-size:26px}
+    .opts{padding:0 18px 6px}
+    .opt{grid-template-columns:1fr;padding:18px 0;gap:10px}
+    .opt .t{padding-top:0}
+    .fixed{padding-top:0}
+    .chip{padding:8px 12px}
+    .bar .wrap{padding:12px 16px;flex-wrap:wrap}
+    .bar .info{flex:1 1 100%}
+    .btns{width:100%}
+    .btns .btn{flex:1;padding:13px 16px}
+    .btns .btn.ghost{flex:0 0 auto}
+  }
+  @media (max-width:360px){
+    .grid{grid-template-columns:1fr}
   }
 </style>
 
-<div class="wrap">
-  <div class="top">
-    <h1>Pick a cycle</h1>
-    <div class="topbar">
-      <select id="ipPick" title="Appliance this page is talking to"></select>
-      <button class="link" id="saveIp">Save as default</button>
-      <a class="link" href="/stats">Stats</a>
-      <a class="link" href="/advanced">Advanced view</a>
-    </div>
-  </div>
-
-  <div class="state" id="state">
-    <span class="dot" id="dot"></span>
+<main class="wrap">
+  <header class="top rise" style="--i:0">
     <div>
-      <div class="who" id="who">Connecting…</div>
-      <div class="detail" id="detail">reading the machine</div>
+      <p class="brand">Wash / control</p>
+      <h1>Pick a cycle</h1>
     </div>
-    <div class="right" id="right"></div>
-  </div>
+    <div class="topbar">
+      <div class="appl">
+        <select id="ipPick" title="Appliance this page is talking to" aria-label="Appliance"></select>
+        <button class="link" id="saveIp">Save as default</button>
+      </div>
+      <nav class="navlinks" aria-label="Other pages">
+        <a href="/stats">Stats</a>
+        <a href="/advanced">Advanced view</a>
+      </nav>
+    </div>
+  </header>
 
-  <div class="timer" id="timer" hidden>
-    <div class="ring">
-      <svg viewBox="0 0 120 120" aria-hidden="true">
-        <circle class="track" cx="60" cy="60" r="52"/>
-        <circle class="fill" id="ringFill" cx="60" cy="60" r="52"/>
-      </svg>
-      <div class="ringtext"><b id="tBig">--</b><span id="tUnit">min left</span></div>
+  <section class="status rise" style="--i:1" aria-label="Machine status">
+    <div class="state card" id="state" role="status" aria-live="polite">
+      <p class="idx" aria-hidden="true"><b>01</b> / Status</p>
+      <div class="head">
+        <span class="dot" id="dot" aria-hidden="true"></span>
+        <div class="who" id="who">Connecting…</div>
+      </div>
+      <div class="detail" id="detail">reading the machine</div>
+      <div class="right" id="right"></div>
     </div>
+  </section>
+
+  <section class="timer card rise" style="--i:2" id="timer" hidden aria-label="Time left">
+    <p class="idx" aria-hidden="true"><b>02</b> / Time left</p>
+    <div class="readout"><output id="tBig">--</output><span id="tUnit">min left</span></div>
+    <div class="ring">
+      <svg viewBox="0 0 326.7 20" preserveAspectRatio="none" aria-hidden="true">
+        <line class="fill" id="ringFill" x1="0" y1="10" x2="326.7" y2="10"/>
+      </svg>
+    </div>
+    <div class="scale" aria-hidden="true"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
     <div class="tinfo">
       <div class="tprog" id="tProg"></div>
       <div class="tphase" id="tPhase"></div>
       <div class="tdone" id="tDone"></div>
     </div>
-  </div>
+  </section>
 
-  <div class="stoprow" id="stopRow" hidden>
+  <div class="stoprow rise" style="--i:2" id="stopRow" hidden>
     <button class="btn stop" id="stopBtn">Stop wash</button>
     <span class="why" id="stopWhy"></span>
   </div>
 
-  <div class="leadrow">
-    <p class="lead" id="lead">Cycles</p>
-    <select id="modelPick" title="Which program set to show"></select>
-  </div>
-  <div class="grid" id="grid"></div>
+  <section class="cycles rise" style="--i:3" aria-labelledby="lead">
+    <p class="idx" aria-hidden="true"><b>03</b> / Cycles</p>
+    <div class="leadrow">
+      <h2 class="lead" id="lead">Cycles</h2>
+      <select id="modelPick" title="Which program set to show" aria-label="Program set"></select>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
 
   <div id="sheet"></div>
-  <div id="msg"></div>
-</div>
+  <div id="msg" role="status" aria-live="polite"></div>
+</main>
 
 <div class="bar" id="bar" hidden>
-  <div class="info">
-    <div class="l1" id="barName"></div>
-    <div class="l2" id="barCmd"></div>
+  <div class="wrap">
+    <div class="info">
+      <div class="l1" id="barName"></div>
+      <code class="l2" id="barCmd"></code>
+    </div>
+    <div class="btns">
+      <button class="btn ghost" id="cancel">Cancel</button>
+      <button class="btn" id="start">Start wash</button>
+    </div>
   </div>
-  <button class="btn ghost" id="cancel">Cancel</button>
-  <button class="btn" id="start">Start wash</button>
 </div>
 
 <script>
@@ -234,7 +352,7 @@ let profile = {};
    the page must work with no internet at all. All 24x24, stroke currentColor. */
 const I = {};
 const svg = d => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" ' +
-  'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+  'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" ' +
   'stroke-linejoin="round">' + d + "</svg>";
 
 I.cotton = svg('<path d="M8 3 5 5 3 9l3 1v11h12V10l3-1-2-4-3-2"/><path d="M8 3a4 4 0 0 0 8 0"/>');
@@ -337,7 +455,7 @@ async function api(path, params){
   const qs = new URLSearchParams(params || {}).toString();
   let r;
   try{ r = await fetch(path + (qs ? "?" + qs : "")); }
-  catch(e){ throw new Error("Can't reach the local server — is `python server.py` running?"); }
+  catch(e){ throw new Error("Can't reach the local server. Is `python server.py` running?"); }
   const j = await r.json().catch(() => ({}));
   if(!r.ok) throw new Error(j.error || r.statusText);
   return j;
@@ -396,7 +514,7 @@ function renderState(){
   const now = liveName();
   const bits = [];
   if(err) bits.push("Error " + dec.error);
-  else bits.push(dec.machine_state || "—");
+  else bits.push(dec.machine_state || "--");
   if(dec.running && dec.phase) bits.push(dec.phase);
   if(now) bits.push(dec.running ? now : "dial on " + now);
   if(dec.running && dec.remaining_minutes != null){
@@ -406,12 +524,14 @@ function renderState(){
   }
   $("detail").textContent = bits.join(" · ");
 
+  // one telemetry cell per reading: [label, value]
   const r = [];
-  if(dec.temperature_c != null) r.push(dec.temperature_c + "°C");
-  if(dec.spin_rpm != null) r.push(dec.spin_rpm + " rpm");
-  if(dec.fill_percent != null && dec.running) r.push(dec.fill_percent + "% full");
-  if(dec.remote_control === false) r.push("remote control OFF");
-  $("right").textContent = r.join(" · ");
+  if(dec.temperature_c != null) r.push(["Temp", dec.temperature_c + "°C"]);
+  if(dec.spin_rpm != null) r.push(["Spin", dec.spin_rpm + " rpm"]);
+  if(dec.fill_percent != null && dec.running) r.push(["Fill", dec.fill_percent + "%"]);
+  if(dec.remote_control === false) r.push(["Remote", "Off"]);
+  $("right").innerHTML = r.map(([k, v]) =>
+    "<span><small>" + esc(k) + "</small><b>" + esc(v) + "</b></span>").join("");
 }
 
 function renderGrid(){
@@ -431,11 +551,11 @@ function renderGrid(){
                               : String(p.code) === String(live.PrCode);
     return '<button class="cyc" data-s="' + p.serial + '" aria-pressed="' +
       (chosen && chosen.serial === p.serial) + '">' +
-      (isLive ? '<span class="live">ON DIAL</span>'
-              : '<span class="dial">' + (p.sel ?? "?") + "</span>") +
+      '<span class="dial">' + String(p.sel ?? "?").padStart(2, "0") + "</span>" +
+      (isLive ? '<span class="live">On dial</span>' : "") +
       '<span class="ico">' + iconFor(nameOf(p)) + "</span>" +
       '<span class="nm">' + esc(nameOf(p)) + "</span>" +
-      '<span class="meta">' + esc(bits.join(" · ") || "—") + "</span>" +
+      '<span class="meta">' + esc(bits.join(" · ") || "--") + "</span>" +
       "</button>";
   }).join("");
   $("grid").querySelectorAll(".cyc").forEach(b => {
@@ -470,17 +590,15 @@ function renderSheet(){
   }
 
   $("sheet").innerHTML =
-    '<div class="sheet"><header><span class="ico">' + iconFor(nameOf(p)) + "</span>" +
+    '<div class="sheet"><header><p class="idx" aria-hidden="true"><b>04</b> / Options</p><span class="ico">' + iconFor(nameOf(p)) + "</span>" +
       "<div><h2>" + esc(nameOf(p)) + "</h2><div class='sub'>dial position " +
       (p.sel ?? "?") + (p.duration ? " · about " + p.duration + " min" : "") +
-      (p.customText ? "" : ' · <button class="chip" id="progName" style="padding:2px 9px;font-size:12px;' +
-      'min-width:0">Rename</button>') +
+      (p.customText ? "" : ' · <button class="chip mini" id="progName">Rename</button>') +
       "</div></div></header><div class='opts'>" +
-      (p.customText ? '<div class="opt"><div class="t">Display text</div>' +
+      (p.customText ? '<div class="opt"><div class="t">Display text</div><div>' +
         '<input id="dispText" maxlength="32" placeholder="' + esc(p.label.replace(/ \(custom text\)$/, "")) +
-        '" value="' + esc(sel.text || "") + '" style="font:inherit;padding:8px 10px;border-radius:10px;' +
-        'border:1.5px solid var(--line);background:var(--bg);color:var(--ink);width:100%;max-width:280px">' +
-        '<div class="fixed" style="margin-top:6px">Sent as the program name. Shows on the machine only if its display can show text.</div></div>' : "") +
+        '" value="' + esc(sel.text || "") + '" class="field" aria-label="Display text">' +
+        '<div class="fixed">Sent as the program name. Shows on the machine only if its display can show text.</div></div></div>' : "") +
       '<div class="opt"><div class="t">Temperature</div>' +
         chips("temp", dflt.concat(TEMPS.filter(t => t <= tmax)), sel.temp,
               v => v === DEFAULT ? "Machine default" : v === 0 ? "Cold" : v + "°") + "</div>" +
@@ -491,7 +609,7 @@ function renderSheet(){
       '<div class="opt"><div class="t">Delay start</div>' +
         chips("delay", DELAYS, sel.delay,
               v => v === 0 ? "None" : (v / 60) + " h") + "</div>" +
-      '<div class="opt"><div class="t">Extras</div>' + optionBlock(p) + "</div>" +
+      '<div class="opt"><div class="t">Extras</div><div>' + optionBlock(p) + "</div></div>" +
     "</div></div>";
 
   const dispText = $("dispText");
@@ -526,7 +644,7 @@ function renderSheet(){
     const bits = allowedBits(chosen);
     const live = bits.filter(b => String(live_opt(b)) === "1");
     const bit = prompt("Which option number? " + bits.join(", ") +
-      (live.length ? " — the machine currently has " + live.join(", ") + " on." : ""),
+      (live.length ? ". The machine currently has " + live.join(", ") + " on." : ""),
       live[0] || bits[0]);
     if(!bit) return;
     const name = prompt("Name it as it appears on the machine. Suggestions: " +
@@ -547,8 +665,7 @@ function optionBlock(p){
       '<button class="chip" data-bit="' + b + '" aria-pressed="' +
       ((sel.opts >> (b - 1) & 1) === 1) + '">' + esc(optName(b)) + "</button>").join("") +
     '</div><div class="note">Turn one on at the machine, then press Name to label it ' +
-    'for this washer. <button class="chip" id="optName" style="padding:4px 10px;' +
-    'font-size:12px;min-width:0">Name a button</button></div>';
+    'for this washer. <button class="chip mini" id="optName">Name a button</button></div>';
 }
 
 // The shape the official app sends (seen in packet captures). The machine
@@ -576,7 +693,7 @@ function renderBar(){
   if(sel.delay > 0) bits.push("in " + (sel.delay / 60) + " h");
   const on = allowedBits(chosen).filter(b => sel.opts >> (b - 1) & 1);
   if(on.length) bits.push(on.map(optName).join(" + "));
-  $("barName").textContent = chosen.label + " — " + bits.filter(Boolean).join(", ");
+  $("barName").textContent = chosen.label + " · " + bits.filter(Boolean).join(", ");
   $("barCmd").textContent = build();
 }
 
@@ -694,7 +811,7 @@ async function renderIpPicker(){
   $("ipPick").innerHTML =
     (known.length
       ? known.map(a => '<option value="' + esc(a.ip) + '">' + esc(a.ip) +
-          (a.model ? " — " + esc(a.model) : "") +
+          (a.model ? " · " + esc(a.model) : "") +
           (a.ip === savedIp ? "  ★" : "") + "</option>").join("")
       : '<option value="">no appliance yet</option>') +
     '<option value="__new">Enter an IP…</option>';
@@ -731,7 +848,7 @@ async function boot(){
   await renderIpPicker();
 
   if(!IP){
-    $("grid").innerHTML = '<div class="empty">No appliance yet — pick ' +
+    $("grid").innerHTML = '<div class="empty">No appliance yet. Pick ' +
       '<b>Enter an IP…</b> above, or use the ' +
       '<a href="/advanced">advanced view</a> to scan for it.</div>';
     $("who").textContent = "Not connected";
