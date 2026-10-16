@@ -61,6 +61,7 @@ class Mock(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self):
+        global _started_at, _started_with
         url = urllib.parse.urlparse(self.path)
         q = {k: v[0] for k, v in urllib.parse.parse_qs(url.query).items()}
 
@@ -84,7 +85,6 @@ class Mock(BaseHTTPRequestHandler):
                 if "=" in pair:
                     k, v = pair.split("=", 1)
                     if k == "StSt":
-                        global _started_at, _started_with
                         if v == "1":
                             STATE["MachMd"] = "2"
                             _started_with = int(os.environ.get("MOCK_CYCLE_SECONDS", "5400"))
@@ -94,6 +94,15 @@ class Mock(BaseHTTPRequestHandler):
                             STATE["MachMd"] = "1"
                             STATE["RemTime"] = "0"
                             _started_at = None
+                    elif k == "Pa":
+                        tick()
+                        if v == "1" and STATE["MachMd"] == "2":
+                            STATE["MachMd"] = "3"
+                            _started_at = None
+                        elif v == "0" and STATE["MachMd"] == "3":
+                            STATE["MachMd"] = "2"
+                            _started_with = int(STATE["RemTime"])
+                            _started_at = time.time()
                     elif k in STATE:
                         STATE[k] = v
             return self.reply('{"response":"OK"}')

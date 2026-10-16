@@ -66,6 +66,9 @@ once a minute (skipped whenever a page is already polling) and remembers each cy
 full length across restarts. If it didn't see a cycle start, the page shows the finish
 time without a percentage rather than guess.
 
+While a cycle runs, the cycle picker shows **Pause** / **Resume** (`Pa=1` / `Pa=0`) next to
+**Stop wash**. Resume has been confirmed on a real washer; pause hasn't yet.
+
 ### Stats
 
 The washer keeps lifetime counters: cycles per dial position, and heating runs by

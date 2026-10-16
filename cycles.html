@@ -191,6 +191,7 @@
   .btn.ghost:hover{background:var(--canvas)}
   .btn.stop{background:var(--red);border-color:var(--red);color:#fff;padding:10px 20px;font-size:14px}
   .btn.stop:hover{background:#A50D26}
+  .btn.pause{padding:10px 20px;font-size:14px}
 
   .msg{margin-top:20px;padding:14px 16px;border-radius:8px;font-size:14px;
        background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--ink-strong)}
@@ -303,6 +304,7 @@
   </section>
 
   <div class="stoprow rise" style="--i:2" id="stopRow" hidden>
+    <button class="btn ghost pause" id="pauseBtn" hidden>Pause</button>
     <button class="btn stop" id="stopBtn">Stop wash</button>
     <span class="why" id="stopWhy"></span>
   </div>
@@ -787,7 +789,28 @@ function renderStop(){
   $("stopBtn").disabled = !remote;
   $("stopWhy").textContent = remote ? ""
     : "Remote control is off on the machine, so it won't take a stop from here.";
+  // Pause and resume only apply to a cycle that is actually going (2) or paused (3).
+  const md = String(live.MachMd);
+  $("pauseBtn").hidden = md !== "2" && md !== "3";
+  $("pauseBtn").textContent = md === "3" ? "Resume" : "Pause";
+  $("pauseBtn").disabled = !remote;
 }
+
+// Pa=1 pauses and Pa=0 resumes, with no Write=1 (see PROTOCOL.md). Resume is
+// confirmed on hardware; pause is not yet.
+$("pauseBtn").onclick = async () => {
+  const resume = String(live.MachMd) === "3";
+  $("pauseBtn").disabled = true;
+  try{
+    const j = await api("/api/command", {ip: IP, params: resume ? "Pa=0" : "Pa=1"});
+    $("msg").innerHTML = '<div class="msg good">' + (resume ? "Resume" : "Pause") +
+      " sent. Machine replied: " + esc(j.response || "(nothing)") + "</div>";
+    setTimeout(refresh, 2000);
+  }catch(e){
+    $("msg").innerHTML = '<div class="msg bad">' + esc(e.message) + "</div>";
+    $("pauseBtn").disabled = false;
+  }
+};
 
 // What the Home Assistant integration sends: StSt=0 on the running position.
 $("stopBtn").onclick = async () => {
