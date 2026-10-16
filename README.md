@@ -66,6 +66,9 @@ once a minute (skipped whenever a page is already polling) and remembers each cy
 full length across restarts. If it didn't see a cycle start, the page shows the finish
 time without a percentage rather than guess.
 
+While a cycle runs, the cycle picker shows **Pause** / **Resume** (`Pa=1` / `Pa=0`) next to
+**Stop wash**. Resume has been confirmed on a real washer; pause hasn't yet.
+
 ### Stats
 
 The washer keeps lifetime counters: cycles per dial position, and heating runs by
@@ -119,9 +122,11 @@ separately.
 Options ride on a 9-bit mask (`Opt1`–`Opt9`, sent as `&OptMsk1=<int>`). Each program
 declares which bits it accepts, so the picker only offers the ones that cycle supports.
 
-Which bit is which option varies by model and isn't in the database. Set an option on
-the machine's own panel, then press **Name a button** in the cycle picker: it shows which
-`OptN` is on and lets you label it.
+The picker names the bits as documented on a Hoover AWMPD 410LH8/1-S (Prewash, Hygiene,
+Anti-crease, Good night, Rinse +1/+2/+3, AquaPlus, Zoom) and allows only one option from
+{Prewash, Hygiene, Good night} and one extra rinse at a time. Other models may map bits
+differently: set an option on the machine's own panel, then press **Name a button** in
+the cycle picker. It shows which `OptN` is on and lets you relabel it.
 
 ### Custom display text (experimental)
 

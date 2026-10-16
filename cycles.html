@@ -191,6 +191,7 @@
   .btn.ghost:hover{background:var(--canvas)}
   .btn.stop{background:var(--red);border-color:var(--red);color:#fff;padding:10px 20px;font-size:14px}
   .btn.stop:hover{background:#A50D26}
+  .btn.pause{padding:10px 20px;font-size:14px}
 
   .msg{margin-top:20px;padding:14px 16px;border-radius:8px;font-size:14px;
        background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--ink-strong)}
@@ -303,6 +304,7 @@
   </section>
 
   <div class="stoprow rise" style="--i:2" id="stopRow" hidden>
+    <button class="btn ghost pause" id="pauseBtn" hidden>Pause</button>
     <button class="btn stop" id="stopBtn">Stop wash</button>
     <span class="why" id="stopWhy"></span>
   </div>
@@ -399,7 +401,20 @@ const OPTION_SUGGESTIONS = ["Prewash", "Aquaplus", "Anticrease", "Extra dose",
   "Good night", "Hygiene", "Zoom", "Rinse +1", "Rinse +2", "Rinse +3",
   "Steam", "Softener", "Intensive", "Refresh", "Night & day"];
 
-const optName = bit => (profile.options && profile.options[bit]) || "Option " + bit;
+// Bit -> name as documented on a Hoover AWMPD 410LH8/1-S (red_devil "axi" washers), see
+// PROTOCOL.md. Other models may differ: a name you give a bit yourself wins.
+const DEFAULT_OPTION_NAMES = {1:"Prewash", 2:"Hygiene", 3:"Anti-crease", 4:"Good night",
+  5:"Rinse +1", 6:"Rinse +2", 7:"Rinse +3", 8:"AquaPlus", 9:"Zoom"};
+// At most one option from each group may be on.
+const EXCLUSIVE_OPTIONS = [[1, 2, 4], [5, 6, 7]];
+
+const optName = bit => (profile.options && profile.options[bit]) || DEFAULT_OPTION_NAMES[bit] || "Option " + bit;
+function toggleOpt(bit){
+  const on = !(sel.opts >> (bit - 1) & 1);
+  if(on) EXCLUSIVE_OPTIONS.filter(g => g.includes(bit)).flat()
+    .forEach(b => { sel.opts &= ~(1 << (b - 1)); });
+  if(on) sel.opts |= 1 << (bit - 1); else sel.opts &= ~(1 << (bit - 1));
+}
 // Your machine may not be in the program database, so its codes can carry another
 // model's names. A name you give a program code wins everywhere.
 // your own dial's names win; otherwise a cycle you renamed, then the database's
@@ -513,7 +528,7 @@ function renderState(){
 
   const now = liveName();
   const bits = [];
-  if(err) bits.push("Error " + dec.error);
+  if(err) bits.push("Error " + dec.error + (dec.error_text ? " (" + dec.error_text + ")" : ""));
   else bits.push(dec.machine_state || "--");
   if(dec.running && dec.phase) bits.push(dec.phase);
   if(now) bits.push(dec.running ? now : "dial on " + now);
@@ -618,7 +633,7 @@ function renderSheet(){
     c.onclick = () => { sel[c.dataset.k] = +c.dataset.v; renderSheet(); renderBar(); };
   });
   $("sheet").querySelectorAll(".chip[data-bit]").forEach(c => {
-    c.onclick = () => { sel.opts ^= 1 << (+c.dataset.bit - 1); renderSheet(); renderBar(); };
+    c.onclick = () => { toggleOpt(+c.dataset.bit); renderSheet(); renderBar(); };
   });
   const renamer = $("progName");
   if(renamer) renamer.onclick = async () => {
@@ -664,8 +679,8 @@ function optionBlock(p){
   return '<div class="chips">' + bits.map(b =>
       '<button class="chip" data-bit="' + b + '" aria-pressed="' +
       ((sel.opts >> (b - 1) & 1) === 1) + '">' + esc(optName(b)) + "</button>").join("") +
-    '</div><div class="note">Turn one on at the machine, then press Name to label it ' +
-    'for this washer. <button class="chip mini" id="optName">Name a button</button></div>';
+    '</div><div class="note">Names follow a similar Hoover. If one is wrong, turn it on at ' +
+    'the machine, then press Name to label it for this washer. <button class="chip mini" id="optName">Name a button</button></div>';
 }
 
 // The shape the official app sends (seen in packet captures). The machine
@@ -774,7 +789,28 @@ function renderStop(){
   $("stopBtn").disabled = !remote;
   $("stopWhy").textContent = remote ? ""
     : "Remote control is off on the machine, so it won't take a stop from here.";
+  // Pause and resume only apply to a cycle that is actually going (2) or paused (3).
+  const md = String(live.MachMd);
+  $("pauseBtn").hidden = md !== "2" && md !== "3";
+  $("pauseBtn").textContent = md === "3" ? "Resume" : "Pause";
+  $("pauseBtn").disabled = !remote;
 }
+
+// Pa=1 pauses and Pa=0 resumes, with no Write=1 (see PROTOCOL.md). Resume is
+// confirmed on hardware; pause is not yet.
+$("pauseBtn").onclick = async () => {
+  const resume = String(live.MachMd) === "3";
+  $("pauseBtn").disabled = true;
+  try{
+    const j = await api("/api/command", {ip: IP, params: resume ? "Pa=0" : "Pa=1"});
+    $("msg").innerHTML = '<div class="msg good">' + (resume ? "Resume" : "Pause") +
+      " sent. Machine replied: " + esc(j.response || "(nothing)") + "</div>";
+    setTimeout(refresh, 2000);
+  }catch(e){
+    $("msg").innerHTML = '<div class="msg bad">' + esc(e.message) + "</div>";
+    $("pauseBtn").disabled = false;
+  }
+};
 
 // What the Home Assistant integration sends: StSt=0 on the running position.
 $("stopBtn").onclick = async () => {
