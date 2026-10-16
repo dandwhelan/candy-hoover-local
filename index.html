@@ -163,8 +163,13 @@ const LABELS = {
   RemTime:"Remaining time (seconds)", RecipeId:"Recipe id", Lang:"Language",
   FillR:"Fill level (%)", CheckUpState:"Check-up state",
   DisTestOn:"Self-test running", DisTestRes:"Self-test result",
-  Opt1:"Option 1", Opt2:"Option 2", Opt3:"Option 3", Opt4:"Option 4", Opt5:"Option 5",
-  Opt6:"Option 6", Opt7:"Option 7", Opt8:"Option 8", Opt9:"Option 9",
+  // option names as on a Hoover AWMPD 410LH8/1-S; other models may differ
+  Opt1:"Option 1 (Prewash)", Opt2:"Option 2 (Hygiene)", Opt3:"Option 3 (Anti-crease)",
+  Opt4:"Option 4 (Good night)", Opt5:"Option 5 (Rinse +1)", Opt6:"Option 6 (Rinse +2)",
+  Opt7:"Option 7 (Rinse +3)", Opt8:"Option 8 (AquaPlus)", Opt9:"Option 9 (Zoom)",
+  Det:"Auto-dose detergent", Soft:"Auto-dose softener", DetWarn:"Detergent tank empty",
+  SoftWarn:"Softener tank empty", DetPreW:"Detergent on reserve", SoftPreW:"Softener on reserve",
+  WaterHard:"Water hardness (1 soft · 2 medium · 3 hard)", rED:"Extra dose this cycle",
   BaSt:"Battery", LockSt:"Lock state", Tarea:"Area covered", AvgSpeed:"Average speed",
   Tdays:"Days of usage", TMin:"Minutes of usage", TMIHM:"Hose time",
   LUTime:"Last used", DOFU:"First use", FiErr:"Filter error"
@@ -264,7 +269,7 @@ function renderStatus(j){
     sum = '<div class="tiles">' +
       tile("State", dec.machine_state ?? (f.MachMd ?? "—"),
            dec.running && dec.phase ? dec.phase : "") +
-      tile("Error", dec.error == null ? "none" : dec.error, "Err " + (f.Err ?? "—")) +
+      tile("Error", dec.error == null ? "none" : dec.error + (dec.error_text ? " · " + dec.error_text : ""), "Err " + (f.Err ?? "—")) +
       tile("Program", matchName(f.PrCode) || "—", "code " + (f.PrCode ?? "?")) +
       tile("Remaining", rem == null || !dec.running ? "—"
            : (rem >= 60 ? Math.floor(rem / 60) + "h " + (rem % 60) + "m" : rem + " min"),

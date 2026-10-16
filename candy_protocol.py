@@ -256,6 +256,15 @@ WASH_PHASE = {
 
 DRY_LEVEL = {0: "No dry", 1: "Iron dry", 2: "Hang dry", 3: "Store dry", 4: "Bone dry"}
 
+# Washer Err codes (decimal), from rylos's notes on a Hoover AWMPD 410LH8/1-S.
+ERROR_CODES = {
+    1: "door lock", 7: "door lock", 2: "water inlet", 3: "drain",
+    4: "water level, often excess foam", 6: "unbalanced load", 8: "drum rotation",
+    12: "drying system", 16: "water heating",
+    5: "electronics", 9: "electronics", 11: "electronics", 13: "electronics",
+    15: "electronics", 17: "electronics",
+}
+
 
 def _int(v):
     try:
@@ -308,6 +317,8 @@ def decode_status(flat: dict) -> dict:
     err = _int(flat.get("Err"))
     if err is not None:
         out["error"] = None if err == 0 else err
+        if err and err in ERROR_CODES:
+            out["error_text"] = ERROR_CODES[err]
     return out
 
 

@@ -68,6 +68,24 @@ Common washer/dryer fields: `WiFiStatus`, `Err`, `MachMd` (machine state), `Pr`,
 Seen on a real washer as well: `SLevel` (soil level), `RecipeId`, `Lang`, `FillR` (drum
 fill), `DisTestOn` / `DisTestRes` (self-test).
 
+Auto-dose washers also report:
+
+| Field | Meaning |
+|---|---|
+| `Det`, `Soft` | auto-dose of detergent / softener is on |
+| `DetWarn`, `SoftWarn` | tank empty |
+| `DetPreW`, `SoftPreW` | tank on reserve; once `DPrgCnt` / `SPrgCnt` reaches 3 or more, treat it as empty |
+| `WaterHard` | 1 soft (0–12 °f), 2 medium (13–30 °f), 3 hard (over 30 °f) |
+| `rED` | extra dose for the running cycle |
+
+`Lang` is the display language: 0 it, 1 en, 2 fr, 3 nl, 4 pt, 5 es, 6 de, 7 bg, 8 cs,
+9 sk, 10 hr, 11 el, 12 pl, 13 sr, 14 sl, 15 ro, 16 ru, 17 uk, 18 hu, 19 da, 20 fi, 21 no,
+22 sv, 23 tr, 24 zh, 25 ar.
+
+`CheckUpState` is 1 while the self-check runs and 2 when it's done; `DisTestRes` 1 is OK,
+anything else a fault. `T0W TIW T0R numF unbF unbC NtcW NtcD motS APSoff APSfreq chartL`
+are diagnostics with no known meaning.
+
 ### Enums
 
 `MachMd`, machine state:
@@ -85,7 +103,26 @@ fill), `DisTestOn` / `DisTestRes` (self-test).
 | 4 Last rinse | 5 End | 6 Drying | 7 Error |
 | 8 Steam | 9 Spin (good night) | 10 Spin | |
 
-`DryT`, dry level: 0 No dry, 1 Iron, 2 Hang, 3 Store, 4 Bone.
+`DryT`, dry level: 0 No dry, 1 Iron, 2 Hang, 3 Store, 4 Bone. The AWMPD 410LH8/1-S notes
+give a different scale for that washer-dryer: 0 none, 1 extra, 2 iron, 3 cupboard,
+5 / 6 / 7 / 8 = 120 / 90 / 60 / 30 min, 9 wool. Firmware likely differs here, so check
+yours.
+
+`Steam` (AWMPD 410LH8/1-S): 1 cotton, 2 mixed, 3 refresh, 5 on.
+
+`Err`, washer error code, in **decimal**:
+
+| Code | Meaning |
+|---|---|
+| 1, 7 | door lock |
+| 2 | water inlet |
+| 3 | drain |
+| 4 | water level (often excess foam) |
+| 6 | unbalanced load (you can fix this yourself) |
+| 8 | drum rotation |
+| 12 | drying system |
+| 16 | water heating |
+| 5, 9, 11, 13, 15, 17 | electronics |
 
 These agree with [ofalvai/home-assistant-candy](https://github.com/ofalvai/home-assistant-candy),
 an independent read-only implementation of the same API.
@@ -125,6 +162,23 @@ stop      Write=1&StSt=0&PrNm=<running position>&DelVl=0    (tested on a running
 reset     Write=1&StSt=0&PrNm=2
 check-up  Write=1&CheckUpState=1
 ```
+
+More washer commands, from the AWMPD 410LH8/1-S notes. *(untested)* means not yet
+verified on hardware.
+
+| Command | Parameters |
+|---|---|
+| Pause | `Pa=1`, with no `Write=1` *(untested)* |
+| Resume | `Pa=0`, with no `Write=1` (confirmed on an AWDPD4138LHR/1) |
+| End the Good Night hold (`PrPh=9`) and finish with a spin | `Write=1&RestartGN=1` *(untested)* |
+| Auto-dose on / off | `SetDet=<0\|1>&SetSoft=<0\|1>`, always both *(untested)* |
+| Water hardness | `SetHard=<1-3>`, sent before `SetDet` / `SetSoft` *(untested)* |
+| Self-check (empty drum) | `CheckUpState=1`, then close with `Write=1&StSt=0&PrNm=11` *(untested)* |
+
+On the start command, `ED=1` asks for the "intensive wash" extra dose (auto-dose models,
+programs that offer Prewash); while it's set, other options are off *(untested)*. The
+same notes also send `&Lang=<current Lang>&Stm=0&Dry=0&DispTestOn=1`. Leave out `TmpTgt`
+and `SpdTgt` when the program has none (255), and cap both at the program's maximum.
 
 This is the start command the official app sends, as seen in packet captures by
 [bigmoby/home-assistant-candy](https://github.com/bigmoby/home-assistant-candy).
@@ -170,11 +224,29 @@ using the same bit layout. On AWMPD610LH8B-80, for example:
 | Hygiene 60 | 136 | `010001000` | Opt4, Opt8 |
 | Rinse, Drain Spin, all Rapids, Jeans, Maintenance | 0 | — | none |
 
-**Which bit is which option varies by model and isn't recorded anywhere.** The option
-names exist (Aquaplus, Anticrease, Extra dose, Good night, Hygiene, Prewash, Rinse +1/2/3,
-Zoom, Steam, Softener, Night & day, Refresh), but nothing ties a name to a bit. The
-reliable way is to set the option on the machine's own panel, see which `OptN` flips, and
-note the name. The cycle picker's **Name a button** does exactly that.
+**The program database doesn't say which bit is which option.** It has the names
+(Aquaplus, Anticrease, Extra dose, Good night, Hygiene, Prewash, Rinse +1/2/3, Zoom,
+Steam, Softener, Night & day, Refresh) but never ties one to a bit. On a Hoover
+**AWMPD 410LH8/1-S** (interface `red_devil_axi_ad`) the bits are:
+
+| Value | Field | Option |
+|---|---|---|
+| 1 | `Opt1` | Prewash |
+| 2 | `Opt2` | Hygiene |
+| 4 | `Opt3` | Anti-crease |
+| 8 | `Opt4` | Good Night |
+| 16 / 32 / 64 | `Opt5`–`Opt7` | Extra rinse +1 / +2 / +3 |
+| 128 | `Opt8` | AquaPlus |
+| 256 | `Opt9` | Zoom |
+
+Two groups are **mutually exclusive**: {Prewash, Hygiene, Good Night} (1, 2, 8) and the
+extra rinses (16, 32, 64). Send at most one from each, masked against the program's
+`available_options`. That fits the AWMPD610LH8B-80 table above (Wool takes Anti-crease,
+Good Night, Rinse +1 and AquaPlus, but not Prewash).
+
+The cycle picker uses these names by default and enforces both groups. Other models may
+map bits differently: set the option on the machine's own panel, see which `OptN` flips,
+and use **Name a button** to relabel it.
 
 ### Value scales
 
@@ -213,9 +285,55 @@ Program families by name prefix: `DUAL_WM_WD` (washer-dryer), `WA_PROG` (Wi-Fi w
 cycle count) and dryer counters. Send `http-prepareStatistics.json` first and wait about
 two seconds, or every counter reads `0`. A counter goes up when its cycle finishes.
 
+SmartPro, XCare and HWash300 models use `http-write.json?GetStat=1` instead.
+
 **Program codes are shared between models, but names aren't always.** A machine that
 isn't one of the 16 can report a code that the database names differently from its own
 panel, which is why the app lets you rename cycles.
+
+## Recipes ("downloadable" programs)
+
+*(untested)* Nothing is stored on the washer. A recipe is an ordinary start of a base
+program with fixed values plus `RecipeId=D_<position>`, and the washer echoes `RecipeId`
+back in its status. The list comes from the cloud:
+`GET /api/v1/wm_wd_programs.json?interface_type=red_devil`, with fields `position`,
+`parent`, `temperature`, `spin_speed`, `soil_level`, `steam`, `dry` and `options`
+(`options` are the selectable ones, not presets; spin `MAX` means the program maximum).
+
+`parent` names the base program: 1 cottons, 2 mixed / synthetics, 3 wool, 4 delicates,
+5 / 6 / 12 rapid 14 / 30 / 44, 7 / 9 44–59 min cycles, 8 rinse, 10 coloured cottons,
+11 delicates 59, 101–103 drying. Pick the first matching program on the machine. For
+example, Shirts is parent 9 at 30 °C and 1000 rpm, sent with `RecipeId=D_104`.
+
+## Pairing
+
+**AP mode.** While connected to the appliance's own access point:
+
+```
+GET /http-config.json?encrypted=0&NTW_MODE=<sec>&SSID=<ssid>&PASSWORD=<pw>&ENCRYPT_KEY=<16 chars>
+→ {"response":"success"}
+```
+
+The encrypted variant uses the last 8 characters of the appliance's AP SSID, twice, as
+the key.
+
+**BLE** is for pairing only; there's no status or control over BLE. Service `0000A002-…`
+has `C300` (read: Wi-Fi MAC), `C301` (notify: done) and `C302` (write). Appliances
+advertise manufacturer ID 741 (Espressif), 1349 or 51712. Connect, enable notifications,
+read `C300`, write the packet to `C302`, and wait for the notification:
+
+```
+A5 | total length | 16 | "NTW_MODE=..&SSID=..&PASSWORD=..&ENCRYPT_KEY=.." | CRC16 (big-endian)
+```
+
+The CRC16 covers everything except itself: init `0xFFFF`, reflected, poly `0x6363`,
+final `~crc & 0xFFFF`.
+
+## Sources
+
+The option bits, extra commands, auto-dose fields, error codes, recipes and pairing
+come from [rylos's notes](https://gist.github.com/rylos/42e2360258ad07cb777e54bc3f8df642)
+on a Hoover AWMPD 410LH8/1-S ([issue #1](https://github.com/dandwhelan/candy-hoover-local/issues/1)).
 
 ## Caveats
 
